@@ -14,8 +14,9 @@ from bot.handlers.inventory_handler import (
 
 logger = logging.getLogger(__name__)
 
-async def setup_bot_commands(application):
+async def setup_bot_commands(app_or_bot):
     """Configura el botón azul de Menú y la lista desplegable de comandos en Telegram."""
+    bot = app_or_bot.bot if hasattr(app_or_bot, "bot") else app_or_bot
     commands = [
         BotCommand("start", "Iniciar el bot y ver bienvenida"),
         BotCommand("inventario", "Consultar estado actual del inventario"),
@@ -26,14 +27,15 @@ async def setup_bot_commands(application):
         BotCommand("cancelar", "Cancelar la operación actual"),
     ]
     try:
-        # 1. Registrar lista de comandos por defecto y explícitamente para chats privados
-        await application.bot.set_my_commands(commands)
-        await application.bot.set_my_commands(commands, scope=BotCommandScopeAllPrivateChats())
-        # 2. Activar el botón azul "Menú" a la izquierda de la barra de mensajes en Telegram
-        await application.bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-        logger.info("Botón azul de Menú y desplegable de comandos de Telegram configurados exitosamente.")
+        # 1. Registrar lista de comandos por defecto
+        await bot.set_my_commands(commands)
+        # 2. Registrar lista de comandos explícitamente para chats privados
+        await bot.set_my_commands(commands, scope=BotCommandScopeAllPrivateChats())
+        # 3. Activar el botón azul "Menú" a la izquierda de la barra de mensajes en Telegram
+        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+        logger.info("✅ Botón azul de Menú y desplegable de comandos de Telegram configurados exitosamente.")
     except Exception as e:
-        logger.warning(f"No se pudo establecer el menú de comandos en Telegram: {e}")
+        logger.error(f"❌ No se pudo establecer el menú de comandos en Telegram: {e}", exc_info=True)
 
 def create_telegram_application():
     """Construye y devuelve la aplicación del bot de Telegram con todos sus handlers."""

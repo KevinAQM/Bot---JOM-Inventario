@@ -95,8 +95,11 @@ async def main():
 
     logger.info("Bot en ejecución. Escuchando mensajes de Telegram (Polling mode)...")
 
-    # Iniciar la aplicación en modo polling asíncrono
+    # Iniciar la aplicación en modo polling asíncrono e inicializar comandos de menú explícitamente
     async with telegram_app:
+        await telegram_app.initialize()
+        from bot.bot_app import setup_bot_commands
+        await setup_bot_commands(telegram_app.bot)
         await telegram_app.start()
         await telegram_app.updater.start_polling(drop_pending_updates=True)
 
