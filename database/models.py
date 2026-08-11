@@ -1,7 +1,6 @@
 from datetime import datetime, date
-from typing import Optional
 from sqlalchemy import (
-    Column, String, Integer, Boolean, Date, DateTime, Text, BigInteger, UniqueConstraint, Index
+    Column, String, Integer, Boolean, Date, DateTime, Text, BigInteger, UniqueConstraint
 )
 from sqlalchemy.orm import DeclarativeBase
 

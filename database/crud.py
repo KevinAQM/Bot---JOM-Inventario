@@ -1,13 +1,12 @@
 from datetime import date, datetime
 from typing import List, Dict, Any, Optional
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from database.models import (
     DailyProduction, InventoryWithdrawal, InitialStock, PhotoAudit, PRODUCT_CATALOG
 )
+
 
 async def upsert_production_records(
     session: AsyncSession,
@@ -27,7 +26,6 @@ async def upsert_production_records(
         rec_qty = rec["quantity"]
         rec_worked = rec.get("is_worked_day", True)
 
-        # Buscar si ya existe el registro para esa fecha y producto
         stmt = select(DailyProduction).where(
             DailyProduction.date == rec_date,
             DailyProduction.product_code == rec_code
@@ -52,6 +50,7 @@ async def upsert_production_records(
 
     return count
 
+
 async def record_withdrawal(
     session: AsyncSession,
     product_code: str,
@@ -60,9 +59,7 @@ async def record_withdrawal(
     customer_or_reason: Optional[str] = None,
     withdrawal_date: Optional[date] = None
 ) -> InventoryWithdrawal:
-    """
-    Registra un retiro/descuento de mercadería.
-    """
+    """Registra un retiro/descuento de mercadería."""
     w_date = withdrawal_date or date.today()
     withdrawal = InventoryWithdrawal(
         date=w_date,
@@ -75,22 +72,21 @@ async def record_withdrawal(
     session.add(withdrawal)
     return withdrawal
 
+
 async def set_initial_stock(
     session: AsyncSession,
     stock_dict: Dict[str, int]
 ) -> Dict[str, int]:
-    """
-    Establece el inventario inicial o base para los códigos de producto.
-    """
+    """Establece el inventario inicial o base para los códigos de producto."""
     for code, qty in stock_dict.items():
         code_upper = code.upper()
         if code_upper not in PRODUCT_CATALOG:
             continue
-        
+
         stmt = select(InitialStock).where(InitialStock.product_code == code_upper)
         res = await session.execute(stmt)
         existing = res.scalar_one_or_none()
-        
+
         if existing:
             existing.quantity = qty
             existing.updated_at = datetime.utcnow()
@@ -101,20 +97,19 @@ async def set_initial_stock(
                 updated_at=datetime.utcnow()
             )
             session.add(new_stock)
-            
+
     return stock_dict
+
 
 async def get_consolidated_inventory(session: AsyncSession) -> Dict[str, Dict[str, Any]]:
     """
     Calcula el inventario consolidado actual para cada producto del catálogo:
     Stock Neto = Inventario Inicial + Total Producido - Total Retirado
     """
-    # 1. Obtener Inventario Inicial
     stmt_init = select(InitialStock.product_code, InitialStock.quantity)
     res_init = await session.execute(stmt_init)
     initial_map = {row[0]: row[1] for row in res_init.all()}
 
-    # 2. Obtener Total Producido por Producto
     stmt_prod = select(
         DailyProduction.product_code,
         func.coalesce(func.sum(DailyProduction.quantity), 0)
@@ -122,7 +117,6 @@ async def get_consolidated_inventory(session: AsyncSession) -> Dict[str, Dict[st
     res_prod = await session.execute(stmt_prod)
     produced_map = {row[0]: row[1] for row in res_prod.all()}
 
-    # 3. Obtener Total Retirado por Producto
     stmt_withd = select(
         InventoryWithdrawal.product_code,
         func.coalesce(func.sum(InventoryWithdrawal.quantity), 0)
@@ -148,11 +142,9 @@ async def get_consolidated_inventory(session: AsyncSession) -> Dict[str, Dict[st
 
     return inventory
 
+
 async def get_recent_production(session: AsyncSession, limit_days: int = 7) -> List[Dict[str, Any]]:
-    """
-    Obtiene los registros de producción de los últimos N días registrados.
-    """
-    # Obtener las fechas más recientes
+    """Obtiene los registros de producción de los últimos N días registrados."""
     stmt_dates = select(DailyProduction.date).distinct().order_by(DailyProduction.date.desc()).limit(limit_days)
     res_dates = await session.execute(stmt_dates)
     recent_dates = [row[0] for row in res_dates.all()]
@@ -163,11 +155,10 @@ async def get_recent_production(session: AsyncSession, limit_days: int = 7) -> L
     stmt = select(DailyProduction).where(
         DailyProduction.date.in_(recent_dates)
     ).order_by(DailyProduction.date.desc(), DailyProduction.product_code)
-    
+
     res = await session.execute(stmt)
     all_prods = res.scalars().all()
 
-    # Agrupar por fecha
     grouped = {}
     for p in all_prods:
         d_str = p.date.strftime("%d-%m-%Y")
@@ -181,6 +172,7 @@ async def get_recent_production(session: AsyncSession, limit_days: int = 7) -> L
         grouped[d_str]["items"][p.product_code] = p.quantity
 
     return list(grouped.values())
+
 
 async def create_photo_audit(
     session: AsyncSession,
@@ -199,6 +191,7 @@ async def create_photo_audit(
     session.add(audit)
     return audit
 
+
 async def update_photo_audit_status(
     session: AsyncSession,
     audit_id: int,
@@ -210,3 +203,24 @@ async def update_photo_audit_status(
     audit = res.scalar_one_or_none()
     if audit:
         audit.status = new_status
+
+
+async def get_photo_audit_by_id(
+    session: AsyncSession,
+    audit_id: int
+) -> Optional[PhotoAudit]:
+    """Obtiene un registro de auditoría de foto por su ID."""
+    stmt = select(PhotoAudit).where(PhotoAudit.id == audit_id)
+    res = await session.execute(stmt)
+    return res.scalar_one_or_none()
+
+
+async def count_photos_today(session: AsyncSession, telegram_user_id: int) -> int:
+    """Cuenta cuántas fotos ha enviado un usuario hoy (para el límite diario de 3)."""
+    today = date.today()
+    stmt = select(func.count(PhotoAudit.id)).where(
+        PhotoAudit.telegram_user_id == telegram_user_id,
+        func.date(PhotoAudit.created_at) == today
+    )
+    res = await session.execute(stmt)
+    return res.scalar() or 0

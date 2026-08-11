@@ -1,3 +1,4 @@
+import json
 import logging
 from datetime import datetime
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -8,29 +9,49 @@ from bot.middlewares import restricted_access
 from database.connection import get_db
 from database.crud import (
     upsert_production_records, record_withdrawal, create_photo_audit,
-    update_photo_audit_status, get_consolidated_inventory
+    update_photo_audit_status, get_consolidated_inventory,
+    get_photo_audit_by_id, count_photos_today
 )
 from database.models import PRODUCT_CATALOG
+from services.schemas import AnalisisPizarra
 from services.vision_service import analyze_whiteboard_photo
 
 logger = logging.getLogger(__name__)
 
-# Diccionario en memoria para borradores temporales mientras el usuario confirma
-PENDING_DRAFTS = {}
+# Límite máximo de fotos por usuario por día (para proteger cuota gratuita de Gemini)
+MAX_PHOTOS_PER_DAY = 3
+
 
 @restricted_access
 async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Recibe la foto enviada por el usuario, la analiza con Gemini 2.0 Flash
+    Recibe la foto enviada por el usuario, la analiza con Gemini 3.6 Flash
     y muestra una vista previa interactiva antes de guardar en la BD.
     """
     message = update.message
     if not message or not message.photo:
         return
 
+    telegram_user_id = update.effective_user.id
+
+    # Verificar límite diario de fotos (máximo 3 por día por usuario)
+    async with get_db() as session:
+        photos_today = await count_photos_today(session, telegram_user_id)
+
+    if photos_today >= MAX_PHOTOS_PER_DAY:
+        await message.reply_text(
+            f"⚠️ *Límite diario alcanzado*\n\n"
+            f"Ya has enviado *{photos_today}* fotos hoy. El máximo permitido es *{MAX_PHOTOS_PER_DAY}* por día "
+            f"para proteger la cuota gratuita de la IA.\n\n"
+            f"Podrás enviar nuevas fotos mañana.",
+            parse_mode="Markdown"
+        )
+        return
+
     # Enviar mensaje de espera inicial
     status_msg = await message.reply_text(
-        f"⏳ *Analizando la foto de la pizarra con IA ({config.GEMINI_MODEL})...*\nPor favor espera unos segundos.",
+        f"⏳ *Analizando la foto de la pizarra con IA ({config.GEMINI_MODEL})...*\n"
+        f"Por favor espera unos segundos. (Envío {photos_today + 1}/{MAX_PHOTOS_PER_DAY} del día)",
         parse_mode="Markdown"
     )
 
@@ -39,7 +60,6 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
         photo_file = await message.photo[-1].get_file()
         image_bytes = await photo_file.download_as_bytearray()
         telegram_file_id = photo_file.file_id
-        telegram_user_id = update.effective_user.id
 
         # Analizar con IA Gemini Vision
         analysis, db_records = await analyze_whiteboard_photo(
@@ -55,7 +75,7 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             return
 
-        # Registrar en la tabla de auditoría
+        # Registrar en la tabla de auditoría (persiste el borrador en BD, no en RAM)
         async with get_db() as session:
             audit = await create_photo_audit(
                 session=session,
@@ -64,13 +84,6 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
                 extracted_summary=analysis.model_dump_json()
             )
             audit_id = audit.id
-
-        # Guardar en el diccionario de borradores pendientes
-        PENDING_DRAFTS[audit_id] = {
-            "db_records": db_records,
-            "analysis": analysis,
-            "telegram_user_id": telegram_user_id
-        }
 
         # Formatear vista previa en texto Markdown en español
         preview_lines = [
@@ -129,6 +142,8 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
             parse_mode="Markdown"
         )
 
+
+@restricted_access
 async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Maneja las acciones de confirmación o cancelación de las fotos analizadas."""
     query = update.callback_query
@@ -140,14 +155,29 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
     if data.startswith("confirm_photo_"):
         audit_id = int(data.replace("confirm_photo_", ""))
-        draft = PENDING_DRAFTS.pop(audit_id, None)
 
-        if not draft:
-            await query.edit_message_text("⚠️ Este borrador ya expiró o fue procesado previamente.")
+        # Recuperar el borrador desde la BD (resistente a reinicios del servidor)
+        async with get_db() as session:
+            audit = await get_photo_audit_by_id(session, audit_id)
+
+        if not audit or audit.status != "PENDIENTE":
+            await query.edit_message_text(
+                "⚠️ Este borrador ya fue procesado previamente o no existe.\n"
+                "Envía una nueva foto si necesitas registrar producción."
+            )
             return
 
-        db_records = draft["db_records"]
-        analysis = draft["analysis"]
+        # Reconstruir los datos desde el JSON guardado en la BD
+        try:
+            analysis = AnalisisPizarra.model_validate_json(audit.extracted_summary)
+        except Exception as e:
+            logger.error(f"Error al reconstruir borrador desde BD: {e}")
+            await query.edit_message_text("❌ Error al recuperar los datos de la foto. Por favor envía una nueva foto.")
+            return
+
+        # Recalcular db_records desde el análisis
+        from services.vision_service import _build_db_records
+        db_records = _build_db_records(analysis, config.DEFAULT_YEAR)
 
         try:
             async with get_db() as session:
@@ -157,11 +187,11 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 # 2. Registrar retiros a clientes de la pizarra si los hubiese
                 for day in analysis.days:
                     for w in day.withdrawals:
-                        # Extraer fecha
                         clean_date_str = day.date_str.strip().replace('/', '-')
                         parts = clean_date_str.split('-')
                         if len(parts) == 2:
-                            w_date = datetime(config.DEFAULT_YEAR, int(parts[1]), int(parts[0])).date()
+                            from datetime import date as date_cls
+                            w_date = date_cls(config.DEFAULT_YEAR, int(parts[1]), int(parts[0]))
                             await record_withdrawal(
                                 session=session,
                                 product_code=w.code.value,
@@ -196,7 +226,6 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
     elif data.startswith("cancel_photo_"):
         audit_id = int(data.replace("cancel_photo_", ""))
-        PENDING_DRAFTS.pop(audit_id, None)
 
         async with get_db() as session:
             await update_photo_audit_status(session, audit_id, "DESCARTADO")

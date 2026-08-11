@@ -1,4 +1,4 @@
-# Archivo de secretos reales (¡NUNCA SUBIR A GITHUB!)
+# Archivo de credenciales secretas (¡NUNCA SUBIR A GITHUB!)
 .env
 
 # Base de datos SQLite local (En Render usarás Neon.tech)
@@ -10,11 +10,16 @@ venv/
 .venv/
 env/
 
-# Archivos de caché compilados
+# Archivos de caché compilados de Python
 __pycache__/
 *.pyc
+*.pyo
 .pytest_cache/
 
 # Carpetas de configuración de editores
 .vscode/
 .idea/
+*.swp
+
+# Logs
+*.log

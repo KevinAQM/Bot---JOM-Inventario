@@ -152,6 +152,10 @@ async def confirm_withdrawal(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     try:
         async with get_db() as session:
+            # Verificar stock disponible antes de descontar
+            consolidated = await get_consolidated_inventory(session)
+            current_stock = consolidated.get(product_code, {}).get("current_stock", 0)
+
             await record_withdrawal(
                 session=session,
                 product_code=product_code,
@@ -159,14 +163,25 @@ async def confirm_withdrawal(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 withdrawal_type="MANUAL",
                 customer_or_reason=reason
             )
+            # Re-consultar stock actualizado
             consolidated = await get_consolidated_inventory(session)
 
         new_stock = consolidated.get(product_code, {}).get("current_stock", 0)
+
+        # Advertencia si el stock quedó negativo
+        warning = ""
+        if new_stock < 0:
+            warning = (
+                f"\n\n⚠️ *ADVERTENCIA:* El stock de {cat_info['emoji']} *{cat_info['name']}* "
+                f"quedó en *negativo* (`{new_stock}` unidades). "
+                f"Verifica que el inventario inicial y la producción estén actualizados."
+            )
 
         result_text = (
             f"✅ *¡RETIRO REGISTRADO CORRECTAMENTE!*\n\n"
             f"Se han descontado `{quantity}` unidades de {cat_info['emoji']} *{cat_info['name']}*.\n"
             f"📦 *Nuevo Stock Disponible:* `{new_stock}` unidades."
+            f"{warning}"
         )
         await query.edit_message_text(result_text, parse_mode="Markdown")
 

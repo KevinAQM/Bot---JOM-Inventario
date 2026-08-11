@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ContextTypes, ConversationHandler, CommandHandler, CallbackQueryHandler, MessageHandler, filters
@@ -14,6 +14,9 @@ from database.models import PRODUCT_CATALOG
 
 logger = logging.getLogger(__name__)
 
+# Zona horaria de Perú (UTC-5)
+PERU_TZ = timezone(timedelta(hours=-5))
+
 # Estados para la conversación /set_stock interactiva
 SET_STOCK_PRODUCT, SET_STOCK_QTY = range(2)
 
@@ -24,7 +27,7 @@ async def show_inventory(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async with get_db() as session:
             consolidated = await get_consolidated_inventory(session)
 
-        now_str = datetime.now().strftime("%d-%m-%Y %H:%M")
+        now_str = datetime.now(PERU_TZ).strftime("%d-%m-%Y %H:%M")
         lines = [
             "📦 *ESTADO ACTUAL DEL INVENTARIO DE PRODUCCIÓN*\n",
             f"🕒 _Consultado el: {now_str}_\n"

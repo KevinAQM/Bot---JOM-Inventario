@@ -17,12 +17,13 @@ logger = logging.getLogger(__name__)
 async def setup_bot_commands(application):
     """Configura el menú desplegable de comandos en Telegram."""
     commands = [
-        BotCommand("start", "Iniciar el bot e ver instrucciones"),
+        BotCommand("start", "Iniciar el bot y ver instrucciones"),
         BotCommand("inventario", "Consultar estado actual del inventario"),
         BotCommand("retiro", "Registrar salida o descuento de mercadería"),
         BotCommand("set_stock", "Establecer o ajustar el inventario base"),
         BotCommand("historial", "Ver producción reciente de los últimos días"),
         BotCommand("help", "Ayuda y guía de uso detallada"),
+        BotCommand("cancelar", "Cancelar la operación actual"),
     ]
     try:
         await application.bot.set_my_commands(commands)
