@@ -1,2 +1,20 @@
-DEPLOYMENT.md
-.env.example
+# Archivo de secretos reales (¡NUNCA SUBIR A GITHUB!)
+.env
+
+# Base de datos SQLite local (En Render usarás Neon.tech)
+*.db
+inventario.db
+
+# Entorno virtual de Python
+venv/
+.venv/
+env/
+
+# Archivos de caché compilados
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Carpetas de configuración de editores
+.vscode/
+.idea/
