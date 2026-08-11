@@ -1,4 +1,6 @@
 import sys
+import os
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from config import config
@@ -6,15 +8,41 @@ from database.models import Base
 
 # Soporte para PostgreSQL y SQLite de forma asíncrona
 db_url = config.DATABASE_URL
+connect_args = {}
+
+# Adaptar el esquema de conexión para asyncpg
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
 elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+asyncpg://"):
     db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
+# Si se usa PostgreSQL con asyncpg (Neon/Supabase), corregir el parámetro sslmode
+if "asyncpg" in db_url:
+    parsed = urlparse(db_url)
+    query_params = parse_qs(parsed.query)
+    
+    # asyncpg no acepta 'sslmode' en la query string, usa connect_args={"ssl": ...}
+    if "sslmode" in query_params:
+        sslmode_val = query_params.pop("sslmode")[0]
+        new_query = urlencode(query_params, doseq=True)
+        db_url = urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            new_query,
+            parsed.fragment
+        ))
+        if sslmode_val in ("require", "verify-ca", "verify-full", "prefer"):
+            connect_args["ssl"] = "require"
+    elif "neon.tech" in db_url or "supabase" in db_url:
+        connect_args["ssl"] = "require"
+
 engine = create_async_engine(
     db_url,
     echo=False,
-    future=True
+    future=True,
+    connect_args=connect_args
 )
 
 AsyncSessionLocal = async_sessionmaker(
