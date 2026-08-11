@@ -88,7 +88,7 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             return
 
-        # 5. Registrar en la tabla de auditoría (persiste el borrador en BD)
+        # 5. Registrar en la tabla de auditoría (persiste el borrador en BD con ID numérico garantizado)
         async with get_db() as session:
             audit = await create_photo_audit(
                 session=session,
@@ -97,6 +97,11 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
                 extracted_summary=analysis.model_dump_json()
             )
             audit_id = audit.id
+
+        if not audit_id:
+            logger.error("Error: audit_id es None después de guardar auditoría en BD.")
+            await status_msg.edit_text("❌ Error al generar el identificador del borrador. Por favor reintenta enviando la foto.")
+            return
 
         # 6. Formatear vista previa en texto Markdown en español
         preview_lines = [
@@ -177,7 +182,15 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
 
     try:
         if data.startswith("confirm_photo_"):
-            audit_id = int(data.replace("confirm_photo_", ""))
+            raw_id = data.replace("confirm_photo_", "")
+            if not raw_id.isdigit():
+                await safe_edit_message_text(
+                    query,
+                    "⚠️ Este botón pertenece a un borrador antiguo anterior a la actualización.\n"
+                    "Por favor envía una nueva foto de la pizarra para continuar."
+                )
+                return
+            audit_id = int(raw_id)
 
             # Todo el proceso de confirmación en una sola transacción segura
             async with get_db() as session:
@@ -210,9 +223,9 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 # 2. Registrar retiros a clientes de la pizarra si los hubiese
                 for day in analysis.days:
                     for w in day.withdrawals:
-                        clean_date_str = day.date_str.strip().replace('/', '-')
+                        clean_date_str = str(day.date_str or "").strip().replace('/', '-')
                         parts = clean_date_str.split('-')
-                        if len(parts) == 2:
+                        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
                             try:
                                 w_date = date_cls(config.DEFAULT_YEAR, int(parts[1]), int(parts[0]))
                                 await record_withdrawal(
@@ -223,7 +236,7 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
                                     customer_or_reason=f"Pizarra: {w.customer_name}",
                                     withdrawal_date=w_date
                                 )
-                            except ValueError as val_err:
+                            except (ValueError, TypeError) as val_err:
                                 logger.warning(f"Fecha de retiro inválida '{day.date_str}': {val_err}")
 
                 # 3. Actualizar estado de auditoría
@@ -246,7 +259,11 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
             await safe_edit_message_text(query, "\n".join(stock_summary))
 
         elif data.startswith("cancel_photo_"):
-            audit_id = int(data.replace("cancel_photo_", ""))
+            raw_id = data.replace("cancel_photo_", "")
+            if not raw_id.isdigit():
+                await safe_edit_message_text(query, "❌ Registro descartado.")
+                return
+            audit_id = int(raw_id)
 
             async with get_db() as session:
                 await update_photo_audit_status(session, audit_id, "DESCARTADO")

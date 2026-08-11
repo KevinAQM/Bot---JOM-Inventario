@@ -61,15 +61,16 @@ def _build_db_records(analysis: AnalisisPizarra, year: int) -> List[Dict[str, An
     db_records = []
     for day in analysis.days:
         try:
-            clean_date_str = day.date_str.strip().replace('/', '-')
+            clean_date_str = str(day.date_str or "").strip().replace('/', '-')
             parts = clean_date_str.split('-')
-            if len(parts) == 2:
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
                 day_num = int(parts[0])
                 month_num = int(parts[1])
                 parsed_date = date(year, month_num, day_num)
             else:
+                logger.warning(f"Fecha no numérica omitida: '{day.date_str}'")
                 continue
-        except ValueError as ve:
+        except (ValueError, TypeError) as ve:
             logger.warning(f"Fecha inválida extraída por la IA '{day.date_str}': {ve}")
             continue
 

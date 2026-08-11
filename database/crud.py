@@ -189,6 +189,7 @@ async def create_photo_audit(
         created_at=datetime.utcnow()
     )
     session.add(audit)
+    await session.flush()
     return audit
 
 
