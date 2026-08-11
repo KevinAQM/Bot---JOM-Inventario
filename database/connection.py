@@ -36,12 +36,27 @@ if "asyncpg" in db_url:
     elif "neon.tech" in db_url or "supabase" in db_url:
         connect_args["ssl"] = "require"
 
-engine = create_async_engine(
-    db_url,
-    echo=False,
-    future=True,
-    connect_args=connect_args
-)
+# Configuración robusta del pool de conexiones para Serverless DB (Neon.tech)
+engine_kwargs = {
+    "echo": False,
+    "future": True,
+    "connect_args": connect_args,
+}
+
+if not db_url.startswith("sqlite"):
+    engine_kwargs.update({
+        "pool_pre_ping": True,     # Verifica que la conexión con Neon esté viva antes de cada consulta
+        "pool_recycle": 280,       # Recicla conexiones inactivas cada 4.6 min (evita desconexiones silenciosas de Neon)
+        "pool_size": 5,            # Tamaño del pool
+        "max_overflow": 10,        # Exceso máximo
+        "pool_timeout": 30,        # Tiempo de espera por conexión
+    })
+else:
+    engine_kwargs.update({
+        "pool_pre_ping": True,
+    })
+
+engine = create_async_engine(db_url, **engine_kwargs)
 
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,

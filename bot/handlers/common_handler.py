@@ -55,7 +55,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE):
     """Manejador global de excepciones no capturadas."""
     logger.error(f"Excepción capturada en Telegram handler: {context.error}", exc_info=context.error)
-    if isinstance(update, Update) and update.effective_message:
-        await update.effective_message.reply_text(
-            "⚠️ Ocurrió un error inesperado al procesar tu solicitud. Por favor intenta nuevamente más tarde."
-        )
+    if isinstance(update, Update):
+        if update.callback_query:
+            try:
+                await update.callback_query.answer(
+                    "⚠️ Ocurrió un fallo de conexión. Intenta nuevamente.",
+                    show_alert=True
+                )
+            except Exception:
+                pass
+        elif update.effective_message:
+            try:
+                await update.effective_message.reply_text(
+                    "⚠️ Ocurrió un error inesperado al procesar tu solicitud. Por favor intenta nuevamente."
+                )
+            except Exception:
+                pass

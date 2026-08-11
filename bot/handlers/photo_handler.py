@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, date as date_cls
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
@@ -14,12 +14,24 @@ from database.crud import (
 )
 from database.models import PRODUCT_CATALOG
 from services.schemas import AnalisisPizarra
-from services.vision_service import analyze_whiteboard_photo
+from services.vision_service import analyze_whiteboard_photo, _build_db_records
 
 logger = logging.getLogger(__name__)
 
 # Límite máximo de fotos por usuario por día (para proteger cuota gratuita de Gemini)
 MAX_PHOTOS_PER_DAY = 3
+
+
+async def safe_edit_message_text(query, text: str, reply_markup=None):
+    """Helper para editar mensajes de forma segura manejando errores de parseo Markdown de Telegram."""
+    try:
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+    except Exception as e:
+        logger.warning(f"Fallo al editar mensaje con Markdown, reintentando como texto plano: {e}")
+        try:
+            await query.edit_message_text(text, reply_markup=reply_markup, parse_mode=None)
+        except Exception as inner_e:
+            logger.error(f"Fallo definitivo al editar mensaje: {inner_e}")
 
 
 @restricted_access
@@ -33,35 +45,36 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     telegram_user_id = update.effective_user.id
-
-    # Verificar límite diario de fotos (máximo 3 por día por usuario)
-    async with get_db() as session:
-        photos_today = await count_photos_today(session, telegram_user_id)
-
-    if photos_today >= MAX_PHOTOS_PER_DAY:
-        await message.reply_text(
-            f"⚠️ *Límite diario alcanzado*\n\n"
-            f"Ya has enviado *{photos_today}* fotos hoy. El máximo permitido es *{MAX_PHOTOS_PER_DAY}* por día "
-            f"para proteger la cuota gratuita de la IA.\n\n"
-            f"Podrás enviar nuevas fotos mañana.",
-            parse_mode="Markdown"
-        )
-        return
-
-    # Enviar mensaje de espera inicial
-    status_msg = await message.reply_text(
-        f"⏳ *Analizando la foto de la pizarra con IA ({config.GEMINI_MODEL})...*\n"
-        f"Por favor espera unos segundos. (Envío {photos_today + 1}/{MAX_PHOTOS_PER_DAY} del día)",
-        parse_mode="Markdown"
-    )
+    status_msg = None
 
     try:
-        # Obtener la foto de mayor resolución
+        # 1. Verificar límite diario de fotos (máximo 3 por día por usuario)
+        async with get_db() as session:
+            photos_today = await count_photos_today(session, telegram_user_id)
+
+        if photos_today >= MAX_PHOTOS_PER_DAY:
+            await message.reply_text(
+                f"⚠️ *Límite diario alcanzado*\n\n"
+                f"Ya has enviado *{photos_today}* fotos hoy. El máximo permitido es *{MAX_PHOTOS_PER_DAY}* por día "
+                f"para proteger la cuota gratuita de la IA.\n\n"
+                f"Podrás enviar nuevas fotos mañana.",
+                parse_mode="Markdown"
+            )
+            return
+
+        # 2. Enviar mensaje de espera inicial
+        status_msg = await message.reply_text(
+            f"⏳ *Analizando la foto de la pizarra con IA ({config.GEMINI_MODEL})...*\n"
+            f"Por favor espera unos segundos. (Envío {photos_today + 1}/{MAX_PHOTOS_PER_DAY} del día)",
+            parse_mode="Markdown"
+        )
+
+        # 3. Obtener la foto de mayor resolución
         photo_file = await message.photo[-1].get_file()
         image_bytes = await photo_file.download_as_bytearray()
         telegram_file_id = photo_file.file_id
 
-        # Analizar con IA Gemini Vision
+        # 4. Analizar con IA Gemini Vision
         analysis, db_records = await analyze_whiteboard_photo(
             bytes(image_bytes),
             year=config.DEFAULT_YEAR
@@ -75,7 +88,7 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             return
 
-        # Registrar en la tabla de auditoría (persiste el borrador en BD, no en RAM)
+        # 5. Registrar en la tabla de auditoría (persiste el borrador en BD)
         async with get_db() as session:
             audit = await create_photo_audit(
                 session=session,
@@ -85,7 +98,7 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
             )
             audit_id = audit.id
 
-        # Formatear vista previa en texto Markdown en español
+        # 6. Formatear vista previa en texto Markdown en español
         preview_lines = [
             "📋 *VISTA PREVIA DE PRODUCCIÓN EXTRAÍDA*\n",
             "Revisa los datos leídos de la pizarra antes de ingresar al inventario:\n"
@@ -118,7 +131,6 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
         preview_lines.append("¿Deseas confirmar el ingreso de estos datos?")
         preview_text = "\n".join(preview_lines)
 
-        # Botones interactivos Inline
         keyboard = [
             [
                 InlineKeyboardButton("✅ Confirmar e Ingresar", callback_data=f"confirm_photo_{audit_id}"),
@@ -134,13 +146,19 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
 
     except Exception as e:
-        logger.error(f"Error al procesar la foto con Gemini: {e}", exc_info=True)
-        await status_msg.edit_text(
+        logger.error(f"Error al procesar la foto con Gemini / BD: {e}", exc_info=True)
+        err_text = (
             f"❌ *Error al procesar la foto de la pizarra*\n\n"
-            f"Ocurrió un problema durante el análisis de imagen: `{str(e)}`\n"
-            f"Por favor reintenta enviando una nueva foto más clara.",
-            parse_mode="Markdown"
+            f"Ocurrió un problema: `{str(e)}`\n"
+            f"Por favor reintenta enviando una nueva foto más clara."
         )
+        if status_msg:
+            try:
+                await status_msg.edit_text(err_text, parse_mode="Markdown")
+            except Exception:
+                await message.reply_text(err_text, parse_mode="Markdown")
+        else:
+            await message.reply_text(err_text, parse_mode="Markdown")
 
 
 @restricted_access
@@ -150,37 +168,42 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
     if not query or not query.data:
         return
 
-    await query.answer()
+    try:
+        await query.answer()
+    except Exception as e:
+        logger.warning(f"No se pudo responder al query.answer(): {e}")
+
     data = query.data
 
-    if data.startswith("confirm_photo_"):
-        audit_id = int(data.replace("confirm_photo_", ""))
+    try:
+        if data.startswith("confirm_photo_"):
+            audit_id = int(data.replace("confirm_photo_", ""))
 
-        # Recuperar el borrador desde la BD (resistente a reinicios del servidor)
-        async with get_db() as session:
-            audit = await get_photo_audit_by_id(session, audit_id)
-
-        if not audit or audit.status != "PENDIENTE":
-            await query.edit_message_text(
-                "⚠️ Este borrador ya fue procesado previamente o no existe.\n"
-                "Envía una nueva foto si necesitas registrar producción."
-            )
-            return
-
-        # Reconstruir los datos desde el JSON guardado en la BD
-        try:
-            analysis = AnalisisPizarra.model_validate_json(audit.extracted_summary)
-        except Exception as e:
-            logger.error(f"Error al reconstruir borrador desde BD: {e}")
-            await query.edit_message_text("❌ Error al recuperar los datos de la foto. Por favor envía una nueva foto.")
-            return
-
-        # Recalcular db_records desde el análisis
-        from services.vision_service import _build_db_records
-        db_records = _build_db_records(analysis, config.DEFAULT_YEAR)
-
-        try:
+            # Todo el proceso de confirmación en una sola transacción segura
             async with get_db() as session:
+                audit = await get_photo_audit_by_id(session, audit_id)
+
+                if not audit or audit.status != "PENDIENTE":
+                    await safe_edit_message_text(
+                        query,
+                        "⚠️ Este borrador ya fue procesado previamente o no existe.\n"
+                        "Envía una nueva foto si necesitas registrar producción."
+                    )
+                    return
+
+                # Reconstruir los datos desde el JSON guardado en la BD
+                try:
+                    analysis = AnalisisPizarra.model_validate_json(audit.extracted_summary)
+                except Exception as parse_err:
+                    logger.error(f"Error al reconstruir borrador desde BD: {parse_err}")
+                    await safe_edit_message_text(
+                        query,
+                        "❌ Error al recuperar los datos de la foto. Por favor envía una nueva foto."
+                    )
+                    return
+
+                db_records = _build_db_records(analysis, config.DEFAULT_YEAR)
+
                 # 1. Ejecutar UPSERT atómico en BD
                 count = await upsert_production_records(session, db_records)
 
@@ -190,16 +213,18 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
                         clean_date_str = day.date_str.strip().replace('/', '-')
                         parts = clean_date_str.split('-')
                         if len(parts) == 2:
-                            from datetime import date as date_cls
-                            w_date = date_cls(config.DEFAULT_YEAR, int(parts[1]), int(parts[0]))
-                            await record_withdrawal(
-                                session=session,
-                                product_code=w.code.value,
-                                quantity=w.quantity,
-                                withdrawal_type="CLIENTE_PIZARRA",
-                                customer_or_reason=f"Pizarra: {w.customer_name}",
-                                withdrawal_date=w_date
-                            )
+                            try:
+                                w_date = date_cls(config.DEFAULT_YEAR, int(parts[1]), int(parts[0]))
+                                await record_withdrawal(
+                                    session=session,
+                                    product_code=w.code.value,
+                                    quantity=w.quantity,
+                                    withdrawal_type="CLIENTE_PIZARRA",
+                                    customer_or_reason=f"Pizarra: {w.customer_name}",
+                                    withdrawal_date=w_date
+                                )
+                            except ValueError as val_err:
+                                logger.warning(f"Fecha de retiro inválida '{day.date_str}': {val_err}")
 
                 # 3. Actualizar estado de auditoría
                 await update_photo_audit_status(session, audit_id, "CONFIRMADO")
@@ -218,16 +243,21 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 )
 
             stock_summary.append("\nUsa `/inventario` para ver el desglose completo de stock.")
-            await query.edit_message_text("\n".join(stock_summary), parse_mode="Markdown")
+            await safe_edit_message_text(query, "\n".join(stock_summary))
 
-        except Exception as e:
-            logger.error(f"Error al guardar registros en BD: {e}", exc_info=True)
-            await query.edit_message_text(f"❌ Error al guardar en la base de datos: `{str(e)}`", parse_mode="Markdown")
+        elif data.startswith("cancel_photo_"):
+            audit_id = int(data.replace("cancel_photo_", ""))
 
-    elif data.startswith("cancel_photo_"):
-        audit_id = int(data.replace("cancel_photo_", ""))
+            async with get_db() as session:
+                await update_photo_audit_status(session, audit_id, "DESCARTADO")
 
-        async with get_db() as session:
-            await update_photo_audit_status(session, audit_id, "DESCARTADO")
+            await safe_edit_message_text(query, "❌ *Registro descartado.* La foto no ha sido ingresada al inventario.")
 
-        await query.edit_message_text("❌ *Registro descartado.* La foto no ha sido ingresada al inventario.", parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Error inesperado en handle_photo_callback: {e}", exc_info=True)
+        await safe_edit_message_text(
+            query,
+            f"❌ *Error al procesar la confirmación*\n\n"
+            f"Detalle: `{str(e)}`\n"
+            f"Por favor intenta nuevamente enviando la foto."
+        )
