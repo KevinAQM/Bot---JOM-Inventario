@@ -18,8 +18,10 @@ from services.vision_service import analyze_whiteboard_photo, _build_db_records
 
 logger = logging.getLogger(__name__)
 
-# Límite máximo de fotos por usuario por día (para proteger cuota gratuita de Gemini)
-MAX_PHOTOS_PER_DAY = 3
+# Límite técnico real de pruebas (API Gemini 3.6 Flash)
+MAX_PHOTOS_PER_DAY_TECHNICAL = 20
+# Límite visual mostrado al usuario final en los textos informativos
+DISPLAYED_DAILY_LIMIT = 5
 
 
 async def safe_edit_message_text(query, text: str, reply_markup=None):
@@ -48,24 +50,24 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
     status_msg = None
 
     try:
-        # 1. Verificar límite diario de fotos (máximo 3 por día por usuario)
+        # 1. Verificar límite diario técnico (se bloquea únicamente al alcanzar 20 envíos)
         async with get_db() as session:
             photos_today = await count_photos_today(session, telegram_user_id)
 
-        if photos_today >= MAX_PHOTOS_PER_DAY:
+        if photos_today >= MAX_PHOTOS_PER_DAY_TECHNICAL:
             await message.reply_text(
                 f"⚠️ *Límite diario alcanzado*\n\n"
-                f"Ya has enviado *{photos_today}* fotos hoy. El máximo permitido es *{MAX_PHOTOS_PER_DAY}* por día "
+                f"Ya has enviado *{photos_today}* fotos hoy. Has alcanzado el límite máximo diario del sistema "
                 f"para proteger la cuota gratuita de la IA.\n\n"
                 f"Podrás enviar nuevas fotos mañana.",
                 parse_mode="Markdown"
             )
             return
 
-        # 2. Enviar mensaje de espera inicial
+        # 2. Enviar mensaje de espera inicial (muestra /5 en el texto informativo)
         status_msg = await message.reply_text(
             f"⏳ *Analizando la foto de la pizarra con IA ({config.GEMINI_MODEL})...*\n"
-            f"Por favor espera unos segundos. (Envío {photos_today + 1}/{MAX_PHOTOS_PER_DAY} del día)",
+            f"Por favor espera unos segundos. (Envío {photos_today + 1}/{DISPLAYED_DAILY_LIMIT} del día)",
             parse_mode="Markdown"
         )
 

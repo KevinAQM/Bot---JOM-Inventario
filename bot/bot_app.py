@@ -1,5 +1,5 @@
 import logging
-from telegram import BotCommand
+from telegram import BotCommand, BotCommandScopeAllPrivateChats
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 )
@@ -15,9 +15,9 @@ from bot.handlers.inventory_handler import (
 logger = logging.getLogger(__name__)
 
 async def setup_bot_commands(application):
-    """Configura el menú desplegable de comandos en Telegram."""
+    """Configura el menú desplegable de comandos en Telegram para que el usuario escoja rápidamente."""
     commands = [
-        BotCommand("start", "Iniciar el bot y ver instrucciones"),
+        BotCommand("start", "Iniciar el bot y ver bienvenida"),
         BotCommand("inventario", "Consultar estado actual del inventario"),
         BotCommand("retiro", "Registrar salida o descuento de mercadería"),
         BotCommand("set_stock", "Establecer o ajustar el inventario base"),
@@ -26,8 +26,10 @@ async def setup_bot_commands(application):
         BotCommand("cancelar", "Cancelar la operación actual"),
     ]
     try:
+        # Registrar comandos globalmente y explícitamente para todos los chats privados
         await application.bot.set_my_commands(commands)
-        logger.info("Menú de comandos de Telegram configurado exitosamente.")
+        await application.bot.set_my_commands(commands, scope=BotCommandScopeAllPrivateChats())
+        logger.info("Menú desplegable de comandos de Telegram configurado exitosamente.")
     except Exception as e:
         logger.warning(f"No se pudo establecer el menú de comandos en Telegram: {e}")
 
