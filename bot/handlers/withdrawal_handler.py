@@ -148,6 +148,7 @@ async def confirm_withdrawal(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     product_code = context.user_data.get("withdrawal_product")
     quantity = context.user_data.get("withdrawal_quantity", 0)
+    reason = context.user_data.get("withdrawal_reason", "Salida manual")
     cat_info = get_product_info(product_code)
 
     try:
