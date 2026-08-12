@@ -10,6 +10,7 @@ from database.connection import get_db
 from database.crud import (
     get_consolidated_inventory, get_recent_production, set_initial_stock, get_full_historical_data
 )
+from database.models import PRODUCT_CATALOG
 from utils.helpers import PERU_TZ, get_product_info, escape_markdown
 
 logger = logging.getLogger(__name__)
@@ -102,7 +103,7 @@ async def show_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 else:
                     items_str = []
                     for code, qty in day["items"].items():
-                        cat = PRODUCT_CATALOG.get(code, {"emoji": "📦"})
+                        cat = get_product_info(code)
                         items_str.append(f"{cat['emoji']}{code}:{qty}")
                     lines.append(f"📅 *{d_str}*: " + ", ".join(items_str))
 
@@ -151,7 +152,7 @@ async def start_set_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
                 res = ["⚙️ *INVENTARIO INICIAL ESTABLECIDO CORRECTAMENTE*\n"]
                 for c, q in stock_map.items():
-                    info = PRODUCT_CATALOG[c]
+                    info = get_product_info(c)
                     res.append(f"• {info['emoji']} *{info['name']} ({c})*: Base asignada a `{q}` unidades")
 
                 await update.message.reply_text("\n".join(res), parse_mode="Markdown")
@@ -196,7 +197,7 @@ async def set_stock_product_selected(update: Update, context: ContextTypes.DEFAU
 
     code = data.replace("setstock_", "")
     context.user_data["set_stock_code"] = code
-    info = PRODUCT_CATALOG.get(code, {"name": code, "emoji": "📦"})
+    info = get_product_info(code)
 
     await query.edit_message_text(
         f"Has seleccionado: {info['emoji']} *{info['name']} ({code})*\n\n"
@@ -214,7 +215,7 @@ async def set_stock_qty_entered(update: Update, context: ContextTypes.DEFAULT_TY
 
     qty = int(text)
     code = context.user_data.get("set_stock_code", "R")
-    info = PRODUCT_CATALOG.get(code, {"name": code, "emoji": "📦"})
+    info = get_product_info(code)
 
     try:
         async with get_db() as session:
