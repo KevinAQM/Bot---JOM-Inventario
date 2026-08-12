@@ -9,7 +9,7 @@ from bot.handlers.common_handler import start_command, help_command, error_handl
 from bot.handlers.photo_handler import handle_photo_upload, handle_photo_callback
 from bot.handlers.withdrawal_handler import withdrawal_conv_handler
 from bot.handlers.inventory_handler import (
-    show_inventory, inventory_callback, show_history, set_stock_conv_handler
+    show_inventory, inventory_callback, show_history, set_stock_conv_handler, export_excel_handler
 )
 
 logger = logging.getLogger(__name__)
@@ -19,6 +19,7 @@ async def setup_bot_commands(application):
     commands = [
         BotCommand("start", "Iniciar el bot y ver bienvenida"),
         BotCommand("inventario", "Consultar estado actual del inventario"),
+        BotCommand("excel", "Descargar reporte completo en Excel (.xlsx)"),
         BotCommand("retiro", "Registrar salida o descuento de mercadería"),
         BotCommand("set_stock", "Establecer o ajustar el inventario base"),
         BotCommand("historial", "Ver producción reciente de los últimos días"),
@@ -48,13 +49,15 @@ def create_telegram_application():
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("inventario", show_inventory))
     app.add_handler(CommandHandler("historial", show_history))
+    app.add_handler(CommandHandler("excel", export_excel_handler))
+    app.add_handler(CommandHandler("reporte", export_excel_handler))
 
     # Registro de Recepción de Fotos de Pizarra
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo_upload))
 
     # Registro de Callbacks Inline para confirmación de foto e inventario
     app.add_handler(CallbackQueryHandler(handle_photo_callback, pattern="^(confirm_photo_|cancel_photo_)"))
-    app.add_handler(CallbackQueryHandler(inventory_callback, pattern="^(refresh_inventory|view_history)"))
+    app.add_handler(CallbackQueryHandler(inventory_callback, pattern="^(refresh_inventory|view_history|download_excel)"))
 
     # Manejador Global de Errores
     app.add_error_handler(error_handler)

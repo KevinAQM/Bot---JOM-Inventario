@@ -8,7 +8,7 @@ from telegram.ext import (
 from bot.middlewares import restricted_access
 from database.connection import get_db
 from database.crud import (
-    get_consolidated_inventory, get_recent_production, set_initial_stock
+    get_consolidated_inventory, get_recent_production, set_initial_stock, get_full_historical_data
 )
 from database.models import PRODUCT_CATALOG
 
@@ -51,6 +51,9 @@ async def show_inventory(update: Update, context: ContextTypes.DEFAULT_TYPE):
             [
                 InlineKeyboardButton("🔄 Actualizar", callback_data="refresh_inventory"),
                 InlineKeyboardButton("📜 Historial de Días", callback_data="view_history")
+            ],
+            [
+                InlineKeyboardButton("📊 Descargar Reporte Excel", callback_data="download_excel")
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -70,7 +73,7 @@ async def show_inventory(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.callback_query.edit_message_text(msg, parse_mode="Markdown")
 
 async def inventory_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Maneja los botones del reporte de inventario (actualizar / historial)."""
+    """Maneja los botones del reporte de inventario (actualizar / historial / excel)."""
     query = update.callback_query
     if not query or not query.data:
         return
@@ -80,6 +83,9 @@ async def inventory_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await show_inventory(update, context)
     elif query.data == "view_history":
         await show_history(update, context)
+    elif query.data == "download_excel":
+        await export_excel_handler(update, context)
+
 
 @restricted_access
 async def show_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -248,3 +254,53 @@ set_stock_conv_handler = ConversationHandler(
     },
     fallbacks=[CommandHandler("cancelar", cancel_set_stock)]
 )
+
+
+@restricted_access
+async def export_excel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando /excel o /reporte: Genera y envía el reporte completo en formato Excel (.xlsx)."""
+    status_msg = None
+    try:
+        if update.message:
+            status_msg = await update.message.reply_text("📊 _Generando reporte completo de inventario en Excel..._", parse_mode="Markdown")
+
+        async with get_db() as session:
+            historical_data = await get_full_historical_data(session)
+
+        # Generar Excel en memoria
+        from services.excel_service import generate_excel_report
+        excel_buffer = generate_excel_report(historical_data)
+
+        filename = f"Inventario_JOM_{datetime.now(PERU_TZ).strftime('%Y-%m-%d_%H%M')}.xlsx"
+        caption = f"📊 *Reporte General de Inventario y Producción*\n📅 Generado el: `{datetime.now(PERU_TZ).strftime('%d/%m/%Y %H:%M')}`"
+
+        if update.message:
+            if status_msg:
+                try:
+                    await status_msg.delete()
+                except Exception:
+                    pass
+            await update.message.reply_document(
+                document=excel_buffer,
+                filename=filename,
+                caption=caption,
+                parse_mode="Markdown"
+            )
+        elif update.callback_query:
+            await update.callback_query.message.reply_document(
+                document=excel_buffer,
+                filename=filename,
+                caption=caption,
+                parse_mode="Markdown"
+            )
+    except Exception as e:
+        logger.error(f"Error al generar o enviar reporte Excel: {e}", exc_info=True)
+        err_text = f"❌ Ocurrió un error al generar el archivo Excel: `{str(e)}`"
+        if status_msg:
+            try:
+                await status_msg.edit_text(err_text, parse_mode="Markdown")
+            except Exception:
+                pass
+        elif update.message:
+            await update.message.reply_text(err_text, parse_mode="Markdown")
+

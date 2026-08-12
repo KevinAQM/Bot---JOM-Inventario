@@ -225,3 +225,32 @@ async def count_photos_today(session: AsyncSession, telegram_user_id: int) -> in
     )
     res = await session.execute(stmt)
     return res.scalar() or 0
+
+
+async def get_full_historical_data(session: AsyncSession) -> Dict[str, Any]:
+    """
+    Obtiene todos los registros históricos de producción, retiros e inventario inicial
+    para construir el reporte de Excel.
+    """
+    # 1. Obtener todas las producciones
+    stmt_prod = select(DailyProduction).order_by(DailyProduction.date.asc(), DailyProduction.product_code)
+    res_prod = await session.execute(stmt_prod)
+    all_productions = res_prod.scalars().all()
+
+    # 2. Obtener todos los retiros
+    stmt_withd = select(InventoryWithdrawal).order_by(InventoryWithdrawal.date.asc(), InventoryWithdrawal.id.asc())
+    res_withd = await session.execute(stmt_withd)
+    all_withdrawals = res_withd.scalars().all()
+
+    # 3. Obtener stock inicial
+    stmt_init = select(InitialStock)
+    res_init = await session.execute(stmt_init)
+    all_initial = res_init.scalars().all()
+    initial_map = {item.product_code: item.quantity for item in all_initial}
+
+    return {
+        "productions": all_productions,
+        "withdrawals": all_withdrawals,
+        "initial_stock": initial_map,
+    }
+
