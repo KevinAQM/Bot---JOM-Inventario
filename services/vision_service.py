@@ -1,11 +1,12 @@
 import io
 import logging
 from datetime import date
-from typing import Tuple, List, Dict, Any
+from typing import Tuple, List, Dict, Any, Optional, Union
 from PIL import Image
 
 from config import config
 from services.schemas import AnalisisPizarra, CodigoProducto
+from utils.helpers import parse_board_date
 
 logger = logging.getLogger(__name__)
 
@@ -52,14 +53,22 @@ def process_image_bytes(image_bytes: bytes) -> bytes:
         return image_bytes
 
 
-def _build_db_records(analysis: AnalisisPizarra) -> List[Dict[str, Any]]:
+def _build_db_records(
+    analysis: AnalisisPizarra,
+    base_date: Optional[Union[date, int]] = None
+) -> List[Dict[str, Any]]:
     """
     Convierte la estructura AnalisisPizarra en una lista de registros
     listos para insertar en la base de datos con inferencia dinámica del año (Perú).
     """
+    if isinstance(base_date, int):
+        base_date_obj = date(base_date, 1, 1)
+    else:
+        base_date_obj = base_date
+
     db_records = []
     for day in analysis.days:
-        parsed_date = parse_board_date(day.date_str)
+        parsed_date = parse_board_date(day.date_str, base_date=base_date_obj)
         if not parsed_date:
             logger.warning(f"Fecha no reconocida u omitida de la pizarra: '{day.date_str}'")
             continue
