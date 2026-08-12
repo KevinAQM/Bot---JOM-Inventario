@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.models import (
     DailyProduction, InventoryWithdrawal, InitialStock, PhotoAudit, PRODUCT_CATALOG
 )
+from utils.helpers import get_peru_today, get_product_info
 
 
 async def upsert_production_records(
@@ -36,14 +37,14 @@ async def upsert_production_records(
         if existing:
             existing.quantity = rec_qty
             existing.is_worked_day = rec_worked
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now(timezone.utc)
         else:
             new_prod = DailyProduction(
                 date=rec_date,
                 product_code=rec_code,
                 quantity=rec_qty,
                 is_worked_day=rec_worked,
-                updated_at=datetime.utcnow()
+                updated_at=datetime.now(timezone.utc)
             )
             session.add(new_prod)
         count += 1
@@ -60,14 +61,14 @@ async def record_withdrawal(
     withdrawal_date: Optional[date] = None
 ) -> InventoryWithdrawal:
     """Registra un retiro/descuento de mercadería."""
-    w_date = withdrawal_date or date.today()
+    w_date = withdrawal_date or get_peru_today()
     withdrawal = InventoryWithdrawal(
         date=w_date,
         product_code=product_code.upper(),
         quantity=quantity,
         withdrawal_type=withdrawal_type,
         customer_or_reason=customer_or_reason,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
     session.add(withdrawal)
     return withdrawal
@@ -89,12 +90,12 @@ async def set_initial_stock(
 
         if existing:
             existing.quantity = qty
-            existing.updated_at = datetime.utcnow()
+            existing.updated_at = datetime.now(timezone.utc)
         else:
             new_stock = InitialStock(
                 product_code=code_upper,
                 quantity=qty,
-                updated_at=datetime.utcnow()
+                updated_at=datetime.now(timezone.utc)
             )
             session.add(new_stock)
 
@@ -186,7 +187,7 @@ async def create_photo_audit(
         telegram_user_id=telegram_user_id,
         extracted_summary=extracted_summary,
         status="PENDIENTE",
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
     session.add(audit)
     await session.flush()
@@ -217,8 +218,8 @@ async def get_photo_audit_by_id(
 
 
 async def count_photos_today(session: AsyncSession, telegram_user_id: int) -> int:
-    """Cuenta cuántas fotos ha enviado un usuario hoy (para el límite diario de 3)."""
-    today = date.today()
+    """Cuenta cuántas fotos ha enviado un usuario hoy en zona horaria de Perú."""
+    today = get_peru_today()
     stmt = select(func.count(PhotoAudit.id)).where(
         PhotoAudit.telegram_user_id == telegram_user_id,
         func.date(PhotoAudit.created_at) == today

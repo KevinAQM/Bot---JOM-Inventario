@@ -52,26 +52,16 @@ def process_image_bytes(image_bytes: bytes) -> bytes:
         return image_bytes
 
 
-def _build_db_records(analysis: AnalisisPizarra, year: int) -> List[Dict[str, Any]]:
+def _build_db_records(analysis: AnalisisPizarra) -> List[Dict[str, Any]]:
     """
     Convierte la estructura AnalisisPizarra en una lista de registros
-    listos para insertar en la base de datos. Reutilizable desde photo_handler
-    al reconstruir borradores desde la BD.
+    listos para insertar en la base de datos con inferencia dinámica del año (Perú).
     """
     db_records = []
     for day in analysis.days:
-        try:
-            clean_date_str = str(day.date_str or "").strip().replace('/', '-')
-            parts = clean_date_str.split('-')
-            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
-                day_num = int(parts[0])
-                month_num = int(parts[1])
-                parsed_date = date(year, month_num, day_num)
-            else:
-                logger.warning(f"Fecha no numérica omitida: '{day.date_str}'")
-                continue
-        except (ValueError, TypeError) as ve:
-            logger.warning(f"Fecha inválida extraída por la IA '{day.date_str}': {ve}")
+        parsed_date = parse_board_date(day.date_str)
+        if not parsed_date:
+            logger.warning(f"Fecha no reconocida u omitida de la pizarra: '{day.date_str}'")
             continue
 
         if not day.is_worked_day or not day.items:
@@ -106,8 +96,7 @@ def _build_db_records(analysis: AnalisisPizarra, year: int) -> List[Dict[str, An
 
 
 async def analyze_whiteboard_photo(
-    image_bytes: bytes,
-    year: int = 2026
+    image_bytes: bytes
 ) -> Tuple[AnalisisPizarra, List[Dict[str, Any]]]:
     """
     Analiza la foto de la pizarra utilizando Google Gemini API (gemini-3.6-flash).
@@ -142,5 +131,5 @@ async def analyze_whiteboard_photo(
             f"Error en el análisis de imagen con Gemini IA ({config.GEMINI_MODEL}): {e}"
         )
 
-    db_records = _build_db_records(analysis, year)
+    db_records = _build_db_records(analysis)
     return analysis, db_records

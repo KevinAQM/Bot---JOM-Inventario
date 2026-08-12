@@ -10,8 +10,11 @@ class Config:
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./inventario.db")
-    DEFAULT_YEAR: int = int(os.getenv("DEFAULT_YEAR", "2026"))
     
+    # Límites de fotos diarias
+    MAX_PHOTOS_PER_DAY_TECHNICAL: int = int(os.getenv("MAX_PHOTOS_PER_DAY_TECHNICAL", "20"))
+    DISPLAYED_DAILY_LIMIT: int = int(os.getenv("DISPLAYED_DAILY_LIMIT", "5"))
+
     # Convierte la cadena separada por comas de IDs de Telegram en una lista de enteros
     _raw_users = os.getenv("ALLOWED_TELEGRAM_USERS", "")
     ALLOWED_TELEGRAM_USERS: List[int] = [

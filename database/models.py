@@ -1,8 +1,11 @@
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from sqlalchemy import (
     Column, String, Integer, Boolean, Date, DateTime, Text, BigInteger, UniqueConstraint
 )
 from sqlalchemy.orm import DeclarativeBase
+
+def get_utc_now():
+    return datetime.now(timezone.utc)
 
 class Base(DeclarativeBase):
     pass
@@ -18,7 +21,7 @@ class DailyProduction(Base):
     product_code = Column(String(10), primary_key=True, nullable=False)
     quantity = Column(Integer, default=0, nullable=False)
     is_worked_day = Column(Boolean, default=True, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=get_utc_now, onupdate=get_utc_now, nullable=False)
 
     __table_args__ = (
         UniqueConstraint('date', 'product_code', name='uq_date_product'),
@@ -36,7 +39,7 @@ class InventoryWithdrawal(Base):
     quantity = Column(Integer, nullable=False)
     withdrawal_type = Column(String(30), nullable=False, default="MANUAL")  # MANUAL, CLIENTE_PIZARRA, AJUSTE
     customer_or_reason = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=get_utc_now, nullable=False)
 
 class InitialStock(Base):
     """
@@ -46,7 +49,7 @@ class InitialStock(Base):
 
     product_code = Column(String(10), primary_key=True, nullable=False)
     quantity = Column(Integer, default=0, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=get_utc_now, onupdate=get_utc_now, nullable=False)
 
 class PhotoAudit(Base):
     """
@@ -59,7 +62,8 @@ class PhotoAudit(Base):
     telegram_user_id = Column(BigInteger, nullable=False)
     extracted_summary = Column(Text, nullable=True)
     status = Column(String(20), default="PENDIENTE")  # PENDIENTE, CONFIRMADO, DESCARTADO
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=get_utc_now, nullable=False)
+
 
 # Mapeo descriptivo para la interfaz de usuario en español
 PRODUCT_CATALOG = {

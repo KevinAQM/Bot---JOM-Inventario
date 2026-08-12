@@ -10,12 +10,9 @@ from database.connection import get_db
 from database.crud import (
     get_consolidated_inventory, get_recent_production, set_initial_stock, get_full_historical_data
 )
-from database.models import PRODUCT_CATALOG
+from utils.helpers import PERU_TZ, get_product_info, escape_markdown
 
 logger = logging.getLogger(__name__)
-
-# Zona horaria de Perú (UTC-5)
-PERU_TZ = timezone(timedelta(hours=-5))
 
 # Estados para la conversación /set_stock interactiva
 SET_STOCK_PRODUCT, SET_STOCK_QTY = range(2)

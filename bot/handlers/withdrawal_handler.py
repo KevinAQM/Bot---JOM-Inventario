@@ -7,7 +7,7 @@ from telegram.ext import (
 from bot.middlewares import restricted_access
 from database.connection import get_db
 from database.crud import record_withdrawal, get_consolidated_inventory
-from database.models import PRODUCT_CATALOG
+from utils.helpers import get_product_info, escape_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +57,10 @@ async def product_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     product_code = data.replace("prod_", "")
     context.user_data["withdrawal_product"] = product_code
-    cat_info = PRODUCT_CATALOG.get(product_code, {"name": product_code, "emoji": "📦"})
+    cat_info = get_product_info(product_code)
     
     await query.edit_message_text(
-        f"Has seleccionado: {cat_info['emoji']} *{cat_info['name']} ({product_code})*\n\n"
+        f"Has seleccionado: {cat_info['emoji']} *{cat_info['name']} ({cat_info['code']})*\n\n"
         f"✍️ Ahora, **escribe la cantidad** de unidades a retirar (ejemplo: `15`):",
         parse_mode="Markdown"
     )
@@ -80,7 +80,7 @@ async def quantity_entered(update: Update, context: ContextTypes.DEFAULT_TYPE):
     qty = int(text)
     context.user_data["withdrawal_quantity"] = qty
     product_code = context.user_data.get("withdrawal_product", "R")
-    cat_info = PRODUCT_CATALOG.get(product_code, {"name": product_code, "emoji": "📦"})
+    cat_info = get_product_info(product_code)
 
     keyboard = [[InlineKeyboardButton("⏩ Omitir Nota / Sin Cliente", callback_data="skip_reason")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -111,7 +111,8 @@ async def reason_entered(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Presentar confirmación final
     product_code = context.user_data.get("withdrawal_product", "R")
     quantity = context.user_data.get("withdrawal_quantity", 0)
-    cat_info = PRODUCT_CATALOG.get(product_code, {"name": product_code, "emoji": "📦"})
+    cat_info = get_product_info(product_code)
+    safe_reason = escape_markdown(reason)
 
     keyboard = [
         [
@@ -123,9 +124,9 @@ async def reason_entered(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     summary_text = (
         f"🔍 *CONFIRMACIÓN DE RETIRO DE STOCK*\n\n"
-        f"• **Producto:** {cat_info['emoji']} {cat_info['name']} (`{product_code}`)\n"
+        f"• **Producto:** {cat_info['emoji']} {cat_info['name']} (`{cat_info['code']}`)\n"
         f"• **Cantidad a Descontar:** `{quantity}` unidades\n"
-        f"• **Cliente / Motivo:** _{reason}_\n\n"
+        f"• **Cliente / Motivo:** _{safe_reason}_\n\n"
         f"¿Estás seguro de descontar esta cantidad del inventario?"
     )
 
@@ -147,8 +148,7 @@ async def confirm_withdrawal(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     product_code = context.user_data.get("withdrawal_product")
     quantity = context.user_data.get("withdrawal_quantity", 0)
-    reason = context.user_data.get("withdrawal_reason", "Manual")
-    cat_info = PRODUCT_CATALOG.get(product_code, {"name": product_code, "emoji": "📦"})
+    cat_info = get_product_info(product_code)
 
     try:
         async with get_db() as session:

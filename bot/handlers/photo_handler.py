@@ -15,13 +15,10 @@ from database.crud import (
 from database.models import PRODUCT_CATALOG
 from services.schemas import AnalisisPizarra
 from services.vision_service import analyze_whiteboard_photo, _build_db_records
+from utils.helpers import parse_board_date, escape_markdown, get_product_info
 
 logger = logging.getLogger(__name__)
 
-# Límite técnico real de pruebas (API Gemini 3.6 Flash)
-MAX_PHOTOS_PER_DAY_TECHNICAL = 20
-# Límite visual mostrado al usuario final en los textos informativos
-DISPLAYED_DAILY_LIMIT = 5
 
 
 async def safe_edit_message_text(query, text: str, reply_markup=None):
@@ -54,7 +51,7 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
         async with get_db() as session:
             photos_today = await count_photos_today(session, telegram_user_id)
 
-        if photos_today >= MAX_PHOTOS_PER_DAY_TECHNICAL:
+        if photos_today >= config.MAX_PHOTOS_PER_DAY_TECHNICAL:
             await message.reply_text(
                 f"⚠️ *Límite diario alcanzado*\n\n"
                 f"Ya has enviado *{photos_today}* fotos hoy. Has alcanzado el límite máximo diario del sistema "
@@ -67,7 +64,7 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
         # 2. Enviar mensaje de espera inicial (muestra /5 en el texto informativo)
         status_msg = await message.reply_text(
             f"⏳ *Analizando la foto de la pizarra con IA ({config.GEMINI_MODEL})...*\n"
-            f"Por favor espera unos segundos. (Envío {photos_today + 1}/{DISPLAYED_DAILY_LIMIT} del día)",
+            f"Por favor espera unos segundos. (Envío {photos_today + 1}/{config.DISPLAYED_DAILY_LIMIT} del día)",
             parse_mode="Markdown"
         )
 
@@ -77,10 +74,7 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
         telegram_file_id = photo_file.file_id
 
         # 4. Analizar con IA Gemini Vision
-        analysis, db_records = await analyze_whiteboard_photo(
-            bytes(image_bytes),
-            year=config.DEFAULT_YEAR
-        )
+        analysis, db_records = await analyze_whiteboard_photo(bytes(image_bytes))
 
         if not db_records:
             await status_msg.edit_text(
@@ -114,26 +108,25 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
         for day in analysis.days:
             clean_date = day.date_str
             if not day.is_worked_day:
-                preview_lines.append(f"📅 *{clean_date}* (Día No Laborado / Sin Producción - 'X')")
+                preview_lines.append(f"📅 *{escape_markdown(clean_date)}* (Día No Laborado / Sin Producción - 'X')")
             else:
-                preview_lines.append(f"📅 *Día {day.day_header} ({clean_date})*:")
+                preview_lines.append(f"📅 *Día {escape_markdown(day.day_header)} ({escape_markdown(clean_date)})*:")
                 if not day.items:
                     preview_lines.append("   └ _Sin ítems de producción_")
                 for item in day.items:
-                    code_val = item.code.value
-                    cat_info = PRODUCT_CATALOG.get(code_val, {"name": code_val, "emoji": "📦"})
-                    preview_lines.append(f"   ├ {cat_info['emoji']} *{cat_info['name']} ({code_val})*: {item.quantity} unidades")
+                    p_info = get_product_info(item.code.value)
+                    preview_lines.append(f"   ├ {p_info['emoji']} *{p_info['name']} ({p_info['code']})*: {item.quantity} unidades")
 
                 if day.withdrawals:
                     preview_lines.append("   └ 🛒 *Retiros a clientes registrados:*")
                     for w in day.withdrawals:
-                        w_code = w.code.value
-                        w_cat = PRODUCT_CATALOG.get(w_code, {"name": w_code, "emoji": "📦"})
-                        preview_lines.append(f"      • {w.customer_name}: {w_cat['emoji']} {w.quantity} {w_cat['name']}")
+                        w_info = get_product_info(w.code.value)
+                        safe_customer = escape_markdown(w.customer_name)
+                        preview_lines.append(f"      • {safe_customer}: {w_info['emoji']} {w.quantity} {w_info['name']}")
             preview_lines.append("")
 
         if analysis.observations:
-            preview_lines.append(f"ℹ️ *Observaciones IA:* _{analysis.observations}_\n")
+            preview_lines.append(f"ℹ️ *Observaciones IA:* _{escape_markdown(analysis.observations)}_\n")
 
         preview_lines.append("¿Deseas confirmar el ingreso de estos datos?")
         preview_text = "\n".join(preview_lines)
@@ -217,7 +210,7 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
                     )
                     return
 
-                db_records = _build_db_records(analysis, config.DEFAULT_YEAR)
+                db_records = _build_db_records(analysis)
 
                 # 1. Ejecutar UPSERT atómico en BD
                 count = await upsert_production_records(session, db_records)
@@ -225,11 +218,9 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 # 2. Registrar retiros a clientes de la pizarra si los hubiese
                 for day in analysis.days:
                     for w in day.withdrawals:
-                        clean_date_str = str(day.date_str or "").strip().replace('/', '-')
-                        parts = clean_date_str.split('-')
-                        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                        w_date = parse_board_date(day.date_str)
+                        if w_date:
                             try:
-                                w_date = date_cls(config.DEFAULT_YEAR, int(parts[1]), int(parts[0]))
                                 await record_withdrawal(
                                     session=session,
                                     product_code=w.code.value,
@@ -238,8 +229,8 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
                                     customer_or_reason=f"Pizarra: {w.customer_name}",
                                     withdrawal_date=w_date
                                 )
-                            except (ValueError, TypeError) as val_err:
-                                logger.warning(f"Fecha de retiro inválida '{day.date_str}': {val_err}")
+                            except Exception as val_err:
+                                logger.warning(f"Error al registrar retiro de pizarra para '{day.date_str}': {val_err}")
 
                 # 3. Actualizar estado de auditoría
                 await update_photo_audit_status(session, audit_id, "CONFIRMADO")
@@ -253,8 +244,9 @@ async def handle_photo_callback(update: Update, context: ContextTypes.DEFAULT_TY
             stock_summary.append("📦 *Estado Actualizado del Inventario:*")
 
             for code, data_item in consolidated.items():
+                p_info = get_product_info(code)
                 stock_summary.append(
-                    f"• {data_item['emoji']} *{data_item['name']} ({code})*: `{data_item['current_stock']}` unidades"
+                    f"• {p_info['emoji']} *{p_info['name']} ({p_info['code']})*: `{data_item['current_stock']}` unidades"
                 )
 
             stock_summary.append("\nUsa `/inventario` para ver el desglose completo de stock.")
