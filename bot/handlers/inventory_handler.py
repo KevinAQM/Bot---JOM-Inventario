@@ -177,13 +177,17 @@ async def start_set_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    await update.message.reply_text(
+    text = (
         "⚙️ *CONFIGURACIÓN DE INVENTARIO INICIAL BASE*\n\n"
         "Selecciona el **producto** para definir o ajustar su cantidad inicial base:\n"
-        "_(Tip: También puedes usar `/set_stock R 100 V 50 A 20 NC 30 N 10` en un solo comando)_",
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
+        "💡 *Tip:* También puedes usar `/set_stock R 100 V 50 A 20 NC 30 N 10` en un solo comando."
     )
+
+    if update.message:
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+    elif update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+
     return SET_STOCK_PRODUCT
 
 async def set_stock_product_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
