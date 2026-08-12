@@ -98,8 +98,7 @@ async def main():
     # Iniciar la aplicación en modo polling asíncrono e inicializar comandos de menú explícitamente
     async with telegram_app:
         await telegram_app.initialize()
-        from bot.bot_app import setup_bot_commands
-        await setup_bot_commands(telegram_app.bot)
+        # post_init runs automatically between initialize() and start()
         await telegram_app.start()
         await telegram_app.updater.start_polling(drop_pending_updates=True)
 

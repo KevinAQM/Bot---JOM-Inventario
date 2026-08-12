@@ -1,5 +1,5 @@
 import logging
-from telegram import BotCommand, BotCommandScopeAllPrivateChats, MenuButtonCommands
+from telegram import BotCommand
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 )
@@ -14,9 +14,8 @@ from bot.handlers.inventory_handler import (
 
 logger = logging.getLogger(__name__)
 
-async def setup_bot_commands(app_or_bot):
+async def setup_bot_commands(application):
     """Configura el botón azul de Menú y la lista desplegable de comandos en Telegram."""
-    bot = app_or_bot.bot if hasattr(app_or_bot, "bot") else app_or_bot
     commands = [
         BotCommand("start", "Iniciar el bot y ver bienvenida"),
         BotCommand("inventario", "Consultar estado actual del inventario"),
@@ -27,12 +26,8 @@ async def setup_bot_commands(app_or_bot):
         BotCommand("cancelar", "Cancelar la operación actual"),
     ]
     try:
-        # 1. Registrar lista de comandos por defecto
-        await bot.set_my_commands(commands)
-        # 2. Registrar lista de comandos explícitamente para chats privados
-        await bot.set_my_commands(commands, scope=BotCommandScopeAllPrivateChats())
-        # 3. Activar el botón azul "Menú" a la izquierda de la barra de mensajes en Telegram
-        await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
+        # Registrar lista de comandos por defecto
+        await application.bot.set_my_commands(commands)
         logger.info("✅ Botón azul de Menú y desplegable de comandos de Telegram configurados exitosamente.")
     except Exception as e:
         logger.error(f"❌ No se pudo establecer el menú de comandos en Telegram: {e}", exc_info=True)
