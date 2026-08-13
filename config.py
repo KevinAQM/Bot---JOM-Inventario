@@ -21,6 +21,11 @@ class Config:
         int(uid.strip()) for uid in _raw_users.split(",") if uid.strip().isdigit()
     ]
 
+    _raw_admins = os.getenv("ALLOWED_TELEGRAM_ADMIN", os.getenv("ALLOWED_TELEGRAM_USERS", ""))
+    ALLOWED_TELEGRAM_ADMIN: List[int] = [
+        int(uid.strip()) for uid in _raw_admins.split(",") if uid.strip().isdigit()
+    ]
+
     @classmethod
     def validate(cls) -> None:
         """Verifica que las variables críticas estén presentes antes de iniciar el bot."""

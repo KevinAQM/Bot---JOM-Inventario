@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 def restricted_access(func):
     """
     Decorador middleware para restringir el uso del bot únicamente a los IDs de Telegram autorizados.
-    Si la lista ALLOWED_TELEGRAM_USERS está configurada, bloquea usuarios no autorizados.
+    Permite el acceso si el usuario está en ALLOWED_TELEGRAM_USERS o ALLOWED_TELEGRAM_ADMIN.
     """
     @wraps(func)
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
@@ -19,9 +19,11 @@ def restricted_access(func):
             return
 
         user_id = user.id
-        allowed = config.ALLOWED_TELEGRAM_USERS
+        allowed_users = config.ALLOWED_TELEGRAM_USERS
+        allowed_admins = config.ALLOWED_TELEGRAM_ADMIN
 
-        if allowed and user_id not in allowed:
+        # Si hay restricción configurada y el usuario no está en ninguna lista, se bloquea
+        if (allowed_users or allowed_admins) and (user_id not in allowed_users and user_id not in allowed_admins):
             safe_name = escape_markdown(user.first_name)
             logger.warning(f"Intento de acceso denegado para usuario no autorizado: ID={user_id}, Username=@{user.username}")
             message_text = (
@@ -39,3 +41,37 @@ def restricted_access(func):
         return await func(update, context, *args, **kwargs)
 
     return wrapper
+
+
+def admin_only(func):
+    """
+    Decorador middleware exclusivo para funciones de administración (como /reset_db).
+    Restringe el uso únicamente a los IDs presentes en ALLOWED_TELEGRAM_ADMIN.
+    """
+    @wraps(func)
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
+        user = update.effective_user
+        if not user:
+            return
+
+        user_id = user.id
+        admins = config.ALLOWED_TELEGRAM_ADMIN
+
+        if admins and user_id not in admins:
+            safe_name = escape_markdown(user.first_name)
+            logger.warning(f"Intento de acceso de administrador denegado: ID={user_id}, Username=@{user.username}")
+            message_text = (
+                f"⛔ *Acceso de Administrador Requerido*\n\n"
+                f"Hola, {safe_name}. El comando solicitado es exclusivo para administradores del sistema.\n\n"
+                f"Tu ID de Telegram es: `{user_id}`"
+            )
+            if update.message:
+                await update.message.reply_text(message_text, parse_mode="Markdown")
+            elif update.callback_query:
+                await update.callback_query.answer("⛔ Acceso denegado: Requiere permisos de administrador.", show_alert=True)
+            return
+
+        return await func(update, context, *args, **kwargs)
+
+    return wrapper
+

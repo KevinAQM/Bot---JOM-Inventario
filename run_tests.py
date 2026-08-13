@@ -223,12 +223,45 @@ async def test_manual_editing():
     print("✅ Prueba de Edición Manual COMPLETADA EXITOSAMENTE.\n")
 
 
+async def test_reset_db_functionality():
+    print("🧪 Ejecutando prueba de Reseteo de Base de Datos...")
+    from database.crud import reset_entire_database, create_photo_audit
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async_session = async_sessionmaker(engine, expire_on_commit=False)
+    async with async_session() as session:
+        d1 = date(2026, 8, 1)
+        await set_initial_stock(session, {"R": 500, "V": 200})
+        await upsert_production_records(session, [{"date": d1, "product_code": "R", "quantity": 150}])
+        await record_withdrawal(session, "R", 50, "MANUAL", "Prueba")
+        await create_photo_audit(session, "file_1", 12345, "Foto prueba")
+        await session.commit()
+
+        res = await reset_entire_database(session)
+        await session.commit()
+
+        assert res["deleted_productions"] == 1
+        assert res["deleted_withdrawals"] == 1
+        assert res["deleted_photos"] == 1
+
+        inv = await get_consolidated_inventory(session)
+        assert inv["R"]["current_stock"] == 0
+        assert inv["V"]["current_stock"] == 0
+        print("  ✅ Base de datos reseteada a 0 correctamente")
+
+    await engine.dispose()
+    print("✅ Prueba de Reset DB COMPLETADA EXITOSAMENTE.\n")
+
+
 async def run_all_tests():
     test_pydantic_schemas()
     test_build_db_records()
     await test_crud_and_upsert()
     await test_photo_audit_and_limit()
     await test_manual_editing()
+    await test_reset_db_functionality()
     print("🎉 TODAS LAS PRUEBAS UNITARIAS PASARON CORRECTAMENTE (100% FUNCIONAL).")
 
 

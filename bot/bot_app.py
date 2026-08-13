@@ -12,6 +12,7 @@ from bot.handlers.inventory_handler import (
     show_inventory, inventory_callback, show_history, set_stock_conv_handler, export_excel_handler
 )
 from bot.handlers.edit_handler import edit_conv_handler
+from bot.handlers.admin_handler import reset_db_conv_handler
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +44,7 @@ def create_telegram_application():
     app = ApplicationBuilder().token(config.TELEGRAM_BOT_TOKEN).post_init(setup_bot_commands).build()
 
     # Registros de Conversaciones (tienen prioridad alta)
+    app.add_handler(reset_db_conv_handler)
     app.add_handler(withdrawal_conv_handler)
     app.add_handler(set_stock_conv_handler)
     app.add_handler(edit_conv_handler)

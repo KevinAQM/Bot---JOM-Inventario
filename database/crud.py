@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 from typing import List, Dict, Any, Optional
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import (
@@ -266,5 +266,53 @@ async def get_recent_production_dates(session: AsyncSession, limit: int = 7) -> 
     )
     res = await session.execute(stmt)
     return list(res.scalars().all())
+
+
+async def reset_entire_database(session: AsyncSession) -> Dict[str, int]:
+    """
+    Resetea completamente la base de datos:
+    - Borra registros de daily_production.
+    - Borra registros de inventory_withdrawals.
+    - Borra registros de photo_audit.
+    - Reestablece initial_stock a 0 para los productos del catálogo (R, V, A, NC, N).
+    Devuelve un diccionario con la cantidad de registros eliminados.
+    """
+    stmt_count_prod = select(func.count()).select_from(DailyProduction)
+    prod_count = (await session.execute(stmt_count_prod)).scalar() or 0
+
+    stmt_count_withd = select(func.count()).select_from(InventoryWithdrawal)
+    withd_count = (await session.execute(stmt_count_withd)).scalar() or 0
+
+    stmt_count_photo = select(func.count()).select_from(PhotoAudit)
+    photo_count = (await session.execute(stmt_count_photo)).scalar() or 0
+
+    # Ejecutar eliminaciones
+    await session.execute(delete(DailyProduction))
+    await session.execute(delete(InventoryWithdrawal))
+    await session.execute(delete(PhotoAudit))
+
+    # Reiniciar initial_stock a 0 para todos los productos del catálogo
+    for code in PRODUCT_CATALOG.keys():
+        stmt = select(InitialStock).where(InitialStock.product_code == code)
+        existing = (await session.execute(stmt)).scalar_one_or_none()
+        if existing:
+            existing.quantity = 0
+            existing.updated_at = datetime.now(timezone.utc)
+        else:
+            new_stock = InitialStock(
+                product_code=code,
+                quantity=0,
+                updated_at=datetime.now(timezone.utc)
+            )
+            session.add(new_stock)
+
+    await session.flush()
+
+    return {
+        "deleted_productions": prod_count,
+        "deleted_withdrawals": withd_count,
+        "deleted_photos": photo_count,
+    }
+
 
 
