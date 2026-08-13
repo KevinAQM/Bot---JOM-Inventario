@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.models import (
     DailyProduction, InventoryWithdrawal, InitialStock, PhotoAudit, PRODUCT_CATALOG
 )
-from utils.helpers import get_peru_today, get_product_info
+from utils.helpers import get_peru_today, get_product_info, get_peru_now
 
 
 async def upsert_production_records(
@@ -187,7 +187,7 @@ async def create_photo_audit(
         telegram_user_id=telegram_user_id,
         extracted_summary=extracted_summary,
         status="PENDIENTE",
-        created_at=datetime.now(timezone.utc)
+        created_at=get_peru_now()
     )
     session.add(audit)
     await session.flush()

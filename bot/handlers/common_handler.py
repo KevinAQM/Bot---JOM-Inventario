@@ -19,21 +19,22 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Simplemente *envíame una foto* de la pizarra física de producción. Usaré Inteligencia Artificial de visión (Gemini) "
         f"para extraer automáticamente los datos diarios, evitar duplicados y actualizar el inventario.\n\n"
         f"📋 *2. Comandos Disponibles:*\n"
-        f"• `/start` - Iniciar el bot y ver bienvenida.\n"
+        f"• `/iniciar` - Iniciar el bot y ver bienvenida.\n"
         f"• `/inventario` - Consultar estado actual del inventario.\n"
         f"• `/retiro` - Registrar salida o descuento de mercadería.\n"
+        f"• `/editar` - Editar manualmente la producción de una fecha.\n"
         f"• `/historial` - Ver producción reciente de los últimos días.\n"
-        f"• `/set_stock` - Establecer o ajustar el inventario base.\n"
         f"• `/excel` - Generar reporte excel.\n"
-        f"• `/help` - Ayuda y guía de uso detallada.\n"
+        f"• `/ajustar_stock` - Establecer o ajustar el inventario base.\n"
+        f"• `/ayuda` - Ayuda y guía de uso detallada.\n"
         f"• `/cancelar` - Cancelar la operación actual.\n\n"
-        f"❓ Usa `/help` en cualquier momento si necesitas ayuda detallada."
+        f"❓ Usa `/ayuda` en cualquier momento si necesitas ayuda detallada."
     )
     await update.message.reply_text(welcome_text, parse_mode="Markdown")
 
 @restricted_access
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Comando /help: Guía de uso detallada en español."""
+    """Comando /ayuda: Guía de uso detallada en español."""
     help_text = (
         f"📖 *GUÍA DE USO Y COMANDOS DEL BOT*\n\n"
         f"🟢 *1. Códigos de Producto Manejados:*\n"
@@ -50,13 +51,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"No te preocupes si la foto contiene días anteriores de la semana (ej: de lunes a viernes). "
         f"El sistema actualiza inteligentemente las fechas existentes sin duplicar cantidades.\n\n"
         f"📋 *Lista Completa de Comandos:*\n"
-        f"• `/start` - Iniciar el bot y ver bienvenida.\n"
+        f"• `/iniciar` - Iniciar el bot y ver bienvenida.\n"
         f"• `/inventario` - Consultar estado actual del inventario.\n"
         f"• `/retiro` - Registrar salida o descuento de mercadería.\n"
+        f"• `/editar` - Editar manualmente la producción de una fecha.\n"
         f"• `/historial` - Ver producción reciente de los últimos días.\n"
-        f"• `/set_stock` - Establecer o ajustar el inventario base.\n"
         f"• `/excel` - Generar reporte excel.\n"
-        f"• `/help` - Ayuda y guía de uso detallada.\n"
+        f"• `/ajustar_stock` - Establecer o ajustar el inventario base.\n"
+        f"• `/ayuda` - Ayuda y guía de uso detallada.\n"
         f"• `/cancelar` - Cancelar la operación actual."
     )
     await update.message.reply_text(help_text, parse_mode="Markdown")

@@ -18,15 +18,15 @@ logger = logging.getLogger(__name__)
 async def setup_bot_commands(application):
     """Configura el botón azul de Menú y la lista desplegable de comandos en Telegram."""
     commands = [
-        BotCommand("start", "Iniciar el bot y ver bienvenida"),
-        BotCommand("inventario", "Consultar estado actual del inventario"),
-        BotCommand("editar", "Corregir producción de una fecha"),
-        BotCommand("excel", "Descargar reporte completo en Excel (.xlsx)"),
-        BotCommand("retiro", "Registrar salida o descuento de mercadería"),
-        BotCommand("set_stock", "Establecer o ajustar el inventario base"),
-        BotCommand("historial", "Ver producción reciente de los últimos días"),
-        BotCommand("help", "Ayuda y guía de uso detallada"),
-        BotCommand("cancelar", "Cancelar la operación actual"),
+        BotCommand("iniciar", "Iniciar el bot y ver bienvenida."),
+        BotCommand("inventario", "Consultar estado actual del inventario."),
+        BotCommand("retiro", "Registrar salida o descuento de mercadería."),
+        BotCommand("editar", "Editar manualmente la producción de una fecha."),
+        BotCommand("historial", "Ver producción reciente de los últimos días."),
+        BotCommand("excel", "Generar reporte excel."),
+        BotCommand("ajustar_stock", "Establecer o ajustar el inventario base."),
+        BotCommand("ayuda", "Ayuda y guía de uso detallada."),
+        BotCommand("cancelar", "Cancelar la operación actual."),
     ]
     try:
         # Registrar lista de comandos por defecto
@@ -47,13 +47,12 @@ def create_telegram_application():
     app.add_handler(set_stock_conv_handler)
     app.add_handler(edit_conv_handler)
 
-    # Registro de Comandos Estándar
-    app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("help", help_command))
+    # Registro de Comandos Estándar (soporta nombres en español y alias tradicionales)
+    app.add_handler(CommandHandler(["iniciar", "start"], start_command))
+    app.add_handler(CommandHandler(["ayuda", "help"], help_command))
     app.add_handler(CommandHandler("inventario", show_inventory))
     app.add_handler(CommandHandler("historial", show_history))
-    app.add_handler(CommandHandler("excel", export_excel_handler))
-    app.add_handler(CommandHandler("reporte", export_excel_handler))
+    app.add_handler(CommandHandler(["excel", "reporte"], export_excel_handler))
 
     # Registro de Recepción de Fotos de Pizarra
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo_upload))

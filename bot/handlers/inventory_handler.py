@@ -180,7 +180,7 @@ async def start_set_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⚙️ *CONFIGURACIÓN DE INVENTARIO INICIAL BASE*\n\n"
         "Selecciona el **producto** para definir o ajustar su cantidad inicial base:\n"
-        "💡 *Tip:* También puedes usar `/set_stock R 100 V 50 A 20 NC 30 N 10` en un solo comando."
+        "💡 *Tip:* También puedes usar `/ajustar_stock R 100 V 50 A 20 NC 30 N 10` en un solo comando."
     )
 
     if update.message:
@@ -249,7 +249,7 @@ async def cancel_set_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 set_stock_conv_handler = ConversationHandler(
-    entry_points=[CommandHandler("set_stock", start_set_stock)],
+    entry_points=[CommandHandler(["ajustar_stock", "set_stock"], start_set_stock)],
     states={
         SET_STOCK_PRODUCT: [CallbackQueryHandler(set_stock_product_selected, pattern="^(setstock_|cancel_setstock)")],
         SET_STOCK_QTY: [MessageHandler(filters.TEXT & ~filters.COMMAND, set_stock_qty_entered)]

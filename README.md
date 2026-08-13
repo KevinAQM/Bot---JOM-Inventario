@@ -16,10 +16,14 @@ Sistema automatizado de control de inventarios diseñado para empresas de campo.
 
 3. **Flujos Interactivos en Español para Telegram**:
    - **Envío de Foto**: Muestra vista previa Markdown + botones `[✅ Confirmar e Ingresar]` y `[❌ Descartar]`.
+   - **`/iniciar`**: Muestra la bienvenida e instrucciones de uso.
    - **`/inventario`**: Muestra el saldo neto en tiempo real (`Base Inicial + Producido - Retirado`).
    - **`/retiro`**: Menú guiado con botones inline para descontar mercadería y registrar cliente o motivo.
-   - **`/set_stock`**: Configura o ajusta el inventario inicial base para los 5 productos.
+   - **`/editar`**: Permite editar o corregir manualmente la producción de cualquier fecha.
+   - **`/ajustar_stock`**: Configura o ajusta el inventario inicial base para los 5 productos.
    - **`/historial`**: Revisa los registros de producción de los últimos días.
+   - **`/excel`**: Descarga el reporte histórico consolidado en Excel.
+   - **`/ayuda`**: Guía detallada de comandos y productos.
 
 4. **Seguridad y Whitelist**:
    - Restringe el uso del bot a una lista blanca de IDs de Telegram (`ALLOWED_TELEGRAM_USERS`) para evitar consumo no autorizado o agotamiento de cuotas API.
