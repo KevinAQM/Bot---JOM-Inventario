@@ -255,3 +255,16 @@ async def get_full_historical_data(session: AsyncSession) -> Dict[str, Any]:
         "initial_stock": initial_map,
     }
 
+
+async def get_recent_production_dates(session: AsyncSession, limit: int = 7) -> List[date]:
+    """Obtiene las fechas más recientes que tienen registros de producción en orden descendente."""
+    stmt = (
+        select(DailyProduction.date)
+        .distinct()
+        .order_by(DailyProduction.date.desc())
+        .limit(limit)
+    )
+    res = await session.execute(stmt)
+    return list(res.scalars().all())
+
+

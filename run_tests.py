@@ -185,13 +185,53 @@ def test_build_db_records():
     print("✅ Prueba de _build_db_records COMPLETADA EXITOSAMENTE.\n")
 
 
+async def test_manual_editing():
+    print("🧪 Ejecutando prueba de Edición Manual de Producción...")
+    from database.crud import get_recent_production_dates
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async_session = async_sessionmaker(engine, expire_on_commit=False)
+    async with async_session() as session:
+        d1 = date(2026, 7, 20)
+        d2 = date(2026, 7, 21)
+
+        rec = [
+            {"date": d1, "product_code": "R", "quantity": 100, "is_worked_day": True},
+            {"date": d2, "product_code": "V", "quantity": 50, "is_worked_day": True},
+        ]
+        await upsert_production_records(session, rec)
+        await session.commit()
+
+        dates = await get_recent_production_dates(session, limit=7)
+        assert len(dates) == 2
+        assert dates[0] == d2
+        assert dates[1] == d1
+        print("  ✅ Consulta de fechas recientes para edición correcta")
+
+        # Corrección manual de producción
+        edit_rec = [{"date": d1, "product_code": "R", "quantity": 125, "is_worked_day": True}]
+        await upsert_production_records(session, edit_rec)
+        await session.commit()
+
+        inv = await get_consolidated_inventory(session)
+        assert inv["R"]["produced"] == 125
+        print("  ✅ Corrección manual de producción reflejada en inventario correctamente")
+
+    await engine.dispose()
+    print("✅ Prueba de Edición Manual COMPLETADA EXITOSAMENTE.\n")
+
+
 async def run_all_tests():
     test_pydantic_schemas()
     test_build_db_records()
     await test_crud_and_upsert()
     await test_photo_audit_and_limit()
+    await test_manual_editing()
     print("🎉 TODAS LAS PRUEBAS UNITARIAS PASARON CORRECTAMENTE (100% FUNCIONAL).")
 
 
 if __name__ == "__main__":
     asyncio.run(run_all_tests())
+

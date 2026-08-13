@@ -11,6 +11,7 @@ from bot.handlers.withdrawal_handler import withdrawal_conv_handler
 from bot.handlers.inventory_handler import (
     show_inventory, inventory_callback, show_history, set_stock_conv_handler, export_excel_handler
 )
+from bot.handlers.edit_handler import edit_conv_handler
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ async def setup_bot_commands(application):
     commands = [
         BotCommand("start", "Iniciar el bot y ver bienvenida"),
         BotCommand("inventario", "Consultar estado actual del inventario"),
+        BotCommand("editar", "Corregir producción de una fecha"),
         BotCommand("excel", "Descargar reporte completo en Excel (.xlsx)"),
         BotCommand("retiro", "Registrar salida o descuento de mercadería"),
         BotCommand("set_stock", "Establecer o ajustar el inventario base"),
@@ -43,6 +45,7 @@ def create_telegram_application():
     # Registros de Conversaciones (tienen prioridad alta)
     app.add_handler(withdrawal_conv_handler)
     app.add_handler(set_stock_conv_handler)
+    app.add_handler(edit_conv_handler)
 
     # Registro de Comandos Estándar
     app.add_handler(CommandHandler("start", start_command))
