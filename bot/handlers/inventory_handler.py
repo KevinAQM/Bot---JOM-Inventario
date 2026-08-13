@@ -1,4 +1,5 @@
 import logging
+import re
 from datetime import datetime, timezone, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -131,34 +132,34 @@ async def show_history(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def start_set_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Permite establecer el stock inicial.
-    Soporta uso con argumentos directos: /set_stock R 100 V 50 A 20 NC 30 N 10
+    Soporta uso con argumentos directos: /ajustar_stock R-100 V-50 A-20 NC-30 N-10
     O menú interactivo si no se envían argumentos.
     """
     args = context.args
-    if args and len(args) >= 2:
+    if args:
         # Modo rápido por línea de comandos
         stock_map = {}
-        try:
-            for i in range(0, len(args) - 1, 2):
-                code = args[i].upper()
-                qty = int(args[i + 1])
-                if code in PRODUCT_CATALOG:
-                    stock_map[code] = qty
+        full_args = " ".join(args)
+        # Permite patrones tipo R-100, V-50 o R 100, V 50
+        pattern = r'([A-Za-z]+)\s*[-:]?\s*(\d+)'
+        matches = re.findall(pattern, full_args)
+        for code, qty_str in matches:
+            code_upper = code.upper()
+            if code_upper in PRODUCT_CATALOG:
+                stock_map[code_upper] = int(qty_str)
 
-            if stock_map:
-                async with get_db() as session:
-                    await set_initial_stock(session, stock_map)
-                    consolidated = await get_consolidated_inventory(session)
+        if stock_map:
+            async with get_db() as session:
+                await set_initial_stock(session, stock_map)
+                consolidated = await get_consolidated_inventory(session)
 
-                res = ["⚙️ *INVENTARIO INICIAL ESTABLECIDO CORRECTAMENTE*\n"]
-                for c, q in stock_map.items():
-                    info = get_product_info(c)
-                    res.append(f"• {info['emoji']} *{info['name']} ({c})*: Base asignada a `{q}` unidades")
+            res = ["⚙️ *INVENTARIO INICIAL ESTABLECIDO CORRECTAMENTE*\n"]
+            for c, q in stock_map.items():
+                info = get_product_info(c)
+                res.append(f"• {info['emoji']} *{info['name']} ({c})*: Base asignada a `{q}` unidades")
 
-                await update.message.reply_text("\n".join(res), parse_mode="Markdown")
-                return ConversationHandler.END
-        except ValueError:
-            pass
+            await update.message.reply_text("\n".join(res), parse_mode="Markdown")
+            return ConversationHandler.END
 
     # Modo interactivo paso a paso
     keyboard = [
@@ -180,7 +181,7 @@ async def start_set_stock(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "⚙️ *CONFIGURACIÓN DE INVENTARIO INICIAL BASE*\n\n"
         "Selecciona el **producto** para definir o ajustar su cantidad inicial base:\n"
-        "💡 *Tip:* También puedes usar `/ajustar_stock R 100 V 50 A 20 NC 30 N 10` en un solo comando."
+        "💡 *Tip:* También puedes usar `/ajustar_stock R-100 V-50 A-20 NC-30 N-10` en un solo comando."
     )
 
     if update.message:

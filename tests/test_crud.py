@@ -71,3 +71,35 @@ async def test_withdrawals_calculation(test_db_session):
     inv = await get_consolidated_inventory(session)
     # Stock Neto = 100 (base) + 50 (producido) - 30 (retirado) = 120
     assert inv["R"]["current_stock"] == 120
+
+
+@pytest.mark.asyncio
+async def test_hyphenated_stock_args_parsing(test_db_session):
+    """Prueba que el parseo de argumentos con guiones R-100 V-50 funcione correctamente."""
+    import re
+    from database.models import PRODUCT_CATALOG
+    session = test_db_session
+    
+    args = ["R-100", "V-50", "A-20", "NC-30", "N-10"]
+    full_args = " ".join(args)
+    pattern = r'([A-Za-z]+)\s*[-:]?\s*(\d+)'
+    matches = re.findall(pattern, full_args)
+    
+    stock_map = {}
+    for code, qty_str in matches:
+        code_upper = code.upper()
+        if code_upper in PRODUCT_CATALOG:
+            stock_map[code_upper] = int(qty_str)
+
+    assert stock_map == {"R": 100, "V": 50, "A": 20, "NC": 30, "N": 10}
+
+    await set_initial_stock(session, stock_map)
+    await session.commit()
+
+    inv = await get_consolidated_inventory(session)
+    assert inv["R"]["initial"] == 100
+    assert inv["V"]["initial"] == 50
+    assert inv["A"]["initial"] == 20
+    assert inv["NC"]["initial"] == 30
+    assert inv["N"]["initial"] == 10
+
