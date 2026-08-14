@@ -23,3 +23,6 @@ __pycache__/
 
 # Logs
 *.log
+
+# Documentación e imágenes de prueba internas
+docs_internos/
