@@ -128,7 +128,9 @@ async def analyze_whiteboard_photo(
             config=types.GenerateContentConfig(
                 response_mime_type="application/json",
                 response_schema=AnalisisPizarra,
-                temperature=0.1
+                thinking_config=types.ThinkingConfig(
+                    thinking_level="medium"
+                )
             )
         )
 
