@@ -1,12 +1,12 @@
-# 🤖 Bot de Telegram: Gestión e Inventario de Producción Diaria en Campo (IA Gemini 3.6 Flash)
+# 🤖 Bot de Telegram: Gestión e Inventario de Producción Diaria en Campo (IA Gemini 3.7 Flash)
 
-Sistema automatizado de control de inventarios diseñado para empresas de campo. Extrae datos de producción a partir de fotografías tomadas a una pizarra física acrílica utilizando **Google Gemini 3.6 Flash (IA Visión)**, almacena la información de forma segura en **PostgreSQL / SQLite**, aplica **deduplicación automática (UPSERT)** por fecha y permite retiros e inventarios interactivos en Telegram.
+Sistema automatizado de control de inventarios diseñado para empresas de campo. Extrae datos de producción a partir de fotografías tomadas a una pizarra física acrílica utilizando **Google Gemini 3.7 Flash (IA Visión)**, almacena la información de forma segura en **PostgreSQL / SQLite**, aplica **deduplicación automática (UPSERT)** por fecha y permite retiros e inventarios interactivos en Telegram.
 
 ---
 
 ## 🌟 Características Principales
 
-1. **OCR / Visión por Computadora con Gemini 3.6 Flash**:
+1. **OCR / Visión por Computadora con Gemini 3.7 Flash**:
    - Analiza las fotos de la pizarra y extrae columnas de días (`L`, `M`, `M`, `J`, `V`, `S`, `D`), fechas (`DD-MM`), códigos de producto (`R`, `V`, `A`, `NC`, `N`) y cantidades.
    - Detecta días no laborados marcados con `X`.
    - Lee retiros de clientes anotados al pie de columna (ej. `Maria` -> `V-12`).
@@ -97,7 +97,7 @@ bot_produccion/
 │   ├── models.py             # Modelos ORM (DailyProduction, InventoryWithdrawal, etc.)
 │   └── crud.py               # Operaciones atómicas UPSERT y consultas
 ├── services/
-│   ├── vision_service.py     # Integración con la API Gemini 2.0 Flash
+│   ├── vision_service.py     # Integración con la API Gemini 3.7 Flash
 │   └── schemas.py            # Esquemas Pydantic (Structured Output)
 ├── bot/
 │   ├── middlewares.py        # Control de acceso restringido (Whitelist)

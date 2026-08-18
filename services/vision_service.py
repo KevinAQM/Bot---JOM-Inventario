@@ -108,7 +108,7 @@ async def analyze_whiteboard_photo(
     image_bytes: bytes
 ) -> Tuple[AnalisisPizarra, List[Dict[str, Any]]]:
     """
-    Analiza la foto de la pizarra utilizando Google Gemini API (gemini-3.6-flash).
+    Analiza la foto de la pizarra utilizando Google Gemini API (gemini-3.7-flash).
     Devuelve la estructura Pydantic `AnalisisPizarra` y una lista de registros listos para la BD.
     """
     optimized_bytes = process_image_bytes(image_bytes)

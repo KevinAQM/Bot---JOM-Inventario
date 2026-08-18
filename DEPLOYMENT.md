@@ -37,7 +37,7 @@ Esta guía te explicará detalladamente cómo configurar todas las herramientas 
 3. Haz clic en el botón azul **"Get API key"** (Obtener clave API) en el menú lateral o superior.
 4. Presiona **"Create API key"** -> **"Create API key in new project"**.
 5. Copia la clave generada (empieza por `AIzaSy...`).
-   👉 *Ésta será tu variable `GEMINI_API_KEY`.* (Utiliza el modelo `gemini-3.6-flash`).
+   👉 *Ésta será tu variable `GEMINI_API_KEY`.* (Utiliza el modelo `gemini-3.7-flash`).
 
 ---
 
@@ -98,7 +98,7 @@ Recomendamos **Neon.tech** por ser extremadamente rápido, gratuito y no requeri
    | :--- | :--- |
    | `TELEGRAM_BOT_TOKEN` | Tu token de BotFather (ej. `123456789:AAFg...`) |
    | `GEMINI_API_KEY` | Tu API key de Google AI Studio (ej. `AIzaSy...`) |
-   | `GEMINI_MODEL` | `gemini-3.6-flash` |
+   | `GEMINI_MODEL` | `gemini-3.7-flash` |
    | `DATABASE_URL` | Tu URI de Neon/Supabase (ej. `postgresql://...`) |
    | `ALLOWED_TELEGRAM_USERS` | Tus IDs de Telegram (ej. `123456789,987654321`) |
    | `DEFAULT_YEAR` | `2026` |

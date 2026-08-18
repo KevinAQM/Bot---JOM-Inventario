@@ -36,7 +36,7 @@ async def safe_edit_message_text(query, text: str, reply_markup=None):
 @restricted_access
 async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
-    Recibe la foto enviada por el usuario, la analiza con Gemini 3.6 Flash
+    Recibe la foto enviada por el usuario, la analiza con Gemini 3.7 Flash
     y muestra una vista previa interactiva antes de guardar en la BD.
     """
     message = update.message

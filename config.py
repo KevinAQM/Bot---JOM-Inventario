@@ -8,7 +8,7 @@ load_dotenv()
 class Config:
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-3.7-flash")
     DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./inventario.db")
     
     # Límites de fotos diarias
