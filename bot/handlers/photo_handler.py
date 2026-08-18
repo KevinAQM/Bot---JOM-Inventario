@@ -62,8 +62,9 @@ async def handle_photo_upload(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
 
         # 2. Enviar mensaje de espera inicial (muestra /5 en el texto informativo)
+        model_display = "Gemini 3.7 Flash" if "3.7" in config.GEMINI_MODEL else config.GEMINI_MODEL
         status_msg = await message.reply_text(
-            f"⏳ *Analizando la foto de la pizarra con IA ({config.GEMINI_MODEL})...*\n"
+            f"⏳ *Analizando la foto de la pizarra con IA ({model_display})...*\n"
             f"Por favor espera unos segundos. (Envío {photos_today + 1}/{config.DISPLAYED_DAILY_LIMIT} del día)",
             parse_mode="Markdown"
         )
